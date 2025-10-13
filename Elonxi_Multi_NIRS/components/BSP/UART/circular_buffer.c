@@ -389,7 +389,7 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     
     // 验证帧长度合理性
     if (total_frame_len > MAX_FRAME_SIZE) {
-        ESP_LOGE(TAG, "Frame too large: %d bytes", total_frame_len);
+        ESP_LOGE(TAG, "Frame too large: %ld bytes", total_frame_len);
         return false;
     }
     
@@ -402,7 +402,7 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     if (frame_start > 0) {
         int32_t discarded = circular_buffer_discard(cb, frame_start);
         if (discarded > 0) {
-            ESP_LOGW(TAG, "Discarded %d invalid bytes", discarded);
+            ESP_LOGE(TAG, "Discarded %ld invalid bytes", discarded);
         }
     }
     
@@ -411,7 +411,7 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     int32_t read_len = circular_buffer_read(cb, frame_buf, total_frame_len);
     
     if (read_len != (int32_t)total_frame_len) {
-        ESP_LOGE(TAG, "Frame read error: expected %d, got %d", total_frame_len, read_len);
+        ESP_LOGE(TAG, "Frame read error: expected %ld, got %ld", total_frame_len, read_len);
         return false;
     }
     
@@ -424,12 +424,12 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     // 验证长度字段
     uint16_t expected_data_len = (frame_buf[4] << 8) | frame_buf[5];
     if (expected_data_len != data_len) {
-        ESP_LOGE(TAG, "Frame length mismatch: expected %d, got %d", data_len, expected_data_len);
+        ESP_LOGE(TAG, "Frame length mismatch: expected %d, got %d", (int)data_len, (int)expected_data_len);
         return false;
     }
     
     // 打印接收到的数据（调试用）
-    ESP_LOGI(TAG, "Received valid frame: %d bytes", total_frame_len);
+    ESP_LOGI(TAG, "Received valid frame: %ld bytes", total_frame_len);
     
     //表面肌电
     if(frame_buf[3] == 0x01) {
@@ -468,7 +468,7 @@ void process_all_frames(circular_buffer_t *cb)
                 uint32_t discard_len = data_len - MAX_FRAME_SIZE / 2;
                 int32_t discarded = circular_buffer_discard(cb, discard_len);
                 if (discarded > 0) {
-                    ESP_LOGE(TAG, "Buffer overflow protection: discarded %d bytes", discarded);
+                    ESP_LOGE(TAG, "Buffer overflow protection: discarded %ld bytes", discarded);
                 }
             }
             break;

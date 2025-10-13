@@ -582,7 +582,55 @@ void app_check_battery_level(void)
         LED_R_TOGGLE();
     }
 }
+int repackSendData(uint8_t *data, uint16_t length, uint32_t stamp)
+{
+    uint16_t i=0;
+    uint16_t crc=0;
+    //head
+    data[i++] = 0x5A; 
 
+    //length
+    data[i++] = 0x0;
+    data[i++] = 0x0;
+
+    //cmd
+    data[i++] = DEVICE_TYPE_NIRS_ID +1; 
+
+    //mark
+    data[i++] = 0;//(sDb.seq>>8)&0xFF;
+    data[i++] = 0x01;//sDb.seq&0xFF;
+
+    //sn
+    memcpy(data+i, g_app_var.serialNumber, 8);
+    i += 8;
+
+    data[i++] = (stamp >> 24)&0xFF;
+	data[i++] = (stamp >> 16)&0xFF;
+	data[i++] = (stamp >> 8)&0xFF;
+	data[i++] = stamp&0xFF;
+
+    //interval
+    data[i++] = 0x01; //ms <= 200ms
+
+    //data
+    i += length;
+
+    //printf("packet data= %d %d %d\r\n",data[2418],data[2419], data[2420]);
+
+    //modify length
+    data[1] = (i>> 8)&0xFF;
+    data[2] = i&0xFF;
+
+    //crc
+    crc = CRC16(data, i);
+    data[i++] = (crc >> 8)&0xFF;
+	data[i++] = crc&0xFF;
+
+    //printf("packet ii= %d\r\n",i);
+    //send data
+    return i;	
+
+}
 
 /*****************************************************************************
   * Function:	  
@@ -606,7 +654,7 @@ void app_send_udp_data(void)
     if(g_app_var.emg_sd_write_flag)
     {
         g_app_var.emg_sd_write_flag = 0;
-        app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer, 2+g_app_var.emg_sd_ready_packcnt*SD_SECTOR_NUL,SD_SECTOR_NUL*SD_INT); 
+        app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer, g_app_var.emg_sd_ready_packcnt*SD_SECTOR_NUL,SD_SECTOR_NUL*SD_INT); 
     }
     //send nirs data
     if(g_struct_para.nirs_send_flag)
@@ -618,7 +666,7 @@ void app_send_udp_data(void)
     if(g_app_var.nirs_sd_write_flag)
     {
         g_app_var.nirs_sd_write_flag = 0;
-        app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer,NIRS_START_BLOCK+g_app_var.nirs_sd_ready_packcnt, SD_INT); 
+        app_sdmmc_write_sectors(g_struct_para.sd_nirs_buffer,NIRS_START_BLOCK+g_app_var.nirs_sd_ready_packcnt, SD_INT); 
     }
 }
 
@@ -637,6 +685,7 @@ void app_read_sd_data_to_app(void)
 {
     uint32_t packcnt = 0;
     int ret = 0; 
+    uint32_t sd_packcnt = 0;
     //uint8_t buffer[2500] = {0}; //1024
     int len = 0; //155-100  75-50 59-25 43-12.5
     switch(g_app_var.rf_nirs_dr_index){
@@ -650,9 +699,21 @@ void app_read_sd_data_to_app(void)
     memset(g_app_var.nirs_sd_read_buffer, 0x00, sizeof(g_app_var.nirs_sd_read_buffer)); 
 
     packcnt = (cmt2300_recev_buff[19] << 24) | (cmt2300_recev_buff[20] << 16) | (cmt2300_recev_buff[21] << 8) | (cmt2300_recev_buff[22]);
-    ret = app_sdmmc_read_sectors(g_app_var.nirs_sd_read_buffer,packcnt);
+    // ret = app_sdmmc_read_sectors_safe(g_app_var.nirs_sd_read_buffer,packcnt, 2);
 
-    ESP_LOGI("TO APP", "packcnt=%ld ret=%d",packcnt,ret);
+    // ESP_LOGI("TO APP", "packcnt=%ld ret=%d",packcnt,ret);
+    if(packcnt>g_app_var.nirs_packet_counter){
+        ESP_LOGE("to app", "packet = %ld has no data in sdmmc", packcnt);
+        repackSendData(g_app_var.nirs_sd_read_buffer, len, packcnt);
+        ret = ESP_OK;
+    }
+    else{
+        ret = app_sdmmc_read_sectors_safe(g_app_var.nirs_sd_read_buffer,packcnt, 2);
+        sd_packcnt = (g_app_var.nirs_sd_read_buffer[14] << 24) | (g_app_var.nirs_sd_read_buffer[15] << 16) | (g_app_var.nirs_sd_read_buffer[16] << 8) | (g_app_var.nirs_sd_read_buffer[17]);
+    }
+
+    ESP_LOGI("TO APP", "packcnt= %ld, get_packcnt = %ld, ret=%d", packcnt, sd_packcnt, ret);
+
 
     if(ret != ESP_OK)
     {
@@ -694,7 +755,7 @@ void app_read_emg_sd_data_to_app_multi(uint32_t packcnt)
     memset(g_app_var.emg_sd_read_buffer, 0x00, sizeof(g_app_var.emg_sd_read_buffer)); 
 
     //packcnt = (cmt2300_recev_buff[19] << 24) | (cmt2300_recev_buff[20] << 16) | (cmt2300_recev_buff[21] << 8) | (cmt2300_recev_buff[22]);
-    ret = app_sdmmc_read_sectors(g_app_var.emg_sd_read_buffer,packcnt);
+    ret = app_sdmmc_read_sectors_safe(g_app_var.emg_sd_read_buffer,packcnt, 1);
 
     if(ret != ESP_OK)
     {
@@ -739,7 +800,7 @@ void app_read_nirs_sd_data_to_app_multi(uint32_t packcnt)
     memset(g_app_var.nirs_sd_read_buffer, 0x00, sizeof(g_app_var.nirs_sd_read_buffer)); 
 
     //packcnt = (cmt2300_recev_buff[19] << 24) | (cmt2300_recev_buff[20] << 16) | (cmt2300_recev_buff[21] << 8) | (cmt2300_recev_buff[22]);
-    ret = app_sdmmc_read_sectors_nirs(g_app_var.nirs_sd_read_buffer,packcnt);
+    ret = app_sdmmc_read_sectors(g_app_var.nirs_sd_read_buffer,packcnt, 2);
 
     if(ret != ESP_OK)
     {
@@ -776,7 +837,7 @@ void app_read_sd_data_to_app_imu_multi(uint32_t packcnt)
 
     memset(g_app_var.imu_sd_read_buffer, 0x00, sizeof(g_app_var.imu_sd_read_buffer)); 
 
-    ret = app_sdmmc_read_sectors_imu(g_app_var.imu_sd_read_buffer,packcnt);
+    ret = app_sdmmc_read_sectors(g_app_var.imu_sd_read_buffer,packcnt, 3);
 
     if(ret != ESP_OK)
     {

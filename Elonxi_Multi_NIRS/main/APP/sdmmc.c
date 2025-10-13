@@ -124,6 +124,28 @@ void sd_card_init(void)
     sdmmc_card_print_info(stdout, card);
 }
 
+int app_sdmmc_read_sectors_safe(uint8_t *buffer, uint32_t pack_num, uint8_t data_type){
+    esp_err_t ret;
+    uint32_t read_pack_num = 0;
+    uint32_t pack_baise = pack_num;
+    uint8_t count = 8;
+    while(count--){
+        ret = app_sdmmc_read_sectors(buffer, pack_baise, data_type);
+        read_pack_num = (buffer[14] << 24) | (buffer[15] << 16) | (buffer[16] << 8) | (buffer[17]);
+        if(read_pack_num != pack_num){
+            ESP_LOGE(TAG, "Failed to read packet:%ld in sector, get packet:%ld, try to get real packet in %ld, tried %d times...", pack_num, read_pack_num, pack_baise, 8-count);
+            pack_baise = 2 * pack_num - read_pack_num;
+        }
+        else{
+            break;
+        }
+    }
+    if(!count){
+        ESP_LOGE(TAG,"Failed to read packet %ld in sector.", pack_num);
+    }
+    return ret;
+}
+
 
 /*****************************************************************************
   * Function:	  
@@ -135,64 +157,36 @@ void sd_card_init(void)
   * Return: 	 
   * 		 int 
 *****************************************************************************/
-int  app_sdmmc_read_sectors(uint8_t *buffer, uint32_t pack_num)
+int  app_sdmmc_read_sectors(uint8_t *buffer, uint32_t pack_num, uint8_t data_type)
 {
     esp_err_t ret;
-
-    ret = sdmmc_read_sectors(card, buffer, (pack_num+1)*SD_SECTOR_NUL, SD_SECTOR_NUL);
+    uint32_t data_baise = 0;
+    uint8_t data_bytes = 1;
+    switch(data_type){
+        case 1://emg
+            data_baise = 0;
+            data_bytes = 2;
+            break;
+        case 2://nirs
+            data_baise = NIRS_START_BLOCK;
+            data_bytes = 1;
+            break;
+        case 3://imu
+            data_baise = IMU_START_BLOCK;
+            data_bytes = 1;
+            break;
+    }
+    ret = sdmmc_read_sectors(card, buffer, pack_num * data_bytes + data_baise, data_bytes);
+    //ret = sdmmc_read_sectors(card, buffer, pack_num*SD_SECTOR_NUL, SD_SECTOR_NUL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to read sectors: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to read sectors: %s, data type:%d(1:EMG, 2:NIRS, 3:IMU).", esp_err_to_name(ret), data_type);
         free(card);
     }
 
     return ret;
 }
 
-/*****************************************************************************
-  * Function:	  
-  * 		 app_sdmmc_read_sectors
-  * Description: 
-  * 		 read sectors
-  * Parameters:  
-  * 		 [void]
-  * Return: 	 
-  * 		 int 
-*****************************************************************************/
-int  app_sdmmc_read_sectors_nirs(uint8_t *buffer, uint32_t pack_num)
-{
-    esp_err_t ret;
 
-    ret = sdmmc_read_sectors(card, buffer, (pack_num+1)+NIRS_START_BLOCK, 1);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to read sectors: %s", esp_err_to_name(ret));
-        free(card);
-    }
-
-    return ret;
-}
-
-/*****************************************************************************
-  * Function:	  
-  * 		 app_sdmmc_read_sectors_imu
-  * Description: 
-  * 		 read sectors
-  * Parameters:  
-  * 		 [void]
-  * Return: 	 
-  * 		 int 
-*****************************************************************************/
-int app_sdmmc_read_sectors_imu(uint8_t *buffer, uint32_t pack_num)
-{
-    esp_err_t ret;
-
-    ret = sdmmc_read_sectors(card, buffer, IMU_START_BLOCK+pack_num, 1);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "IMU Failed to read sectors: %s", esp_err_to_name(ret));
-        free(card);
-    }
-
-    return ret;
-}
 
 /*****************************************************************************
   * Function:	  

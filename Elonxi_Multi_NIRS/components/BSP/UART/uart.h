@@ -19,7 +19,7 @@ extern "C"
 #define NIRS_START_BLOCK    (4000000)
 #define NIRS_DATA_LEN       256
 #define EMG_DATA_LEN        1024
-#define SD_BASE_LEN         1024
+#define SD_BASE_LEN         512
 #define SD_INT              10
 #define SD_SECTOR_NUL       2
 
@@ -28,9 +28,9 @@ typedef struct{
     uint8_t emg_send_flag;
     uint8_t nirs_data[NIRS_DATA_LEN];
     uint8_t emg_data[EMG_DATA_LEN];
-    uint8_t sd_nirs_buffer[SD_BASE_LEN*SD_INT];     __attribute__((aligned(4)));
-    uint8_t sd_emg_buffer[SD_BASE_LEN*SD_INT];      __attribute__((aligned(4)));
-    uint8_t imu_sd_buffer[512*10];                  __attribute__((aligned(4)));
+    uint8_t sd_nirs_buffer[SD_BASE_LEN*SD_INT];     
+    uint8_t sd_emg_buffer[SD_BASE_LEN*SD_INT];      
+    uint8_t imu_sd_buffer[SD_BASE_LEN*SD_INT];      
 }G_SENSOR_BUF;
 
 extern G_SENSOR_BUF g_struct_para;

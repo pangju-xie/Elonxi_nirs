@@ -13,9 +13,8 @@
 #define __SDMMC_H
 
 void sd_card_init(void);
-int  app_sdmmc_read_sectors(uint8_t *buffer, uint32_t pack_num);
-int  app_sdmmc_read_sectors_nirs(uint8_t *buffer, uint32_t pack_num);
-int  app_sdmmc_read_sectors_imu(uint8_t *buffer, uint32_t pack_num);
+int  app_sdmmc_read_sectors_safe(uint8_t *buffer, uint32_t pack_num, uint8_t data_type);
+int  app_sdmmc_read_sectors(uint8_t *buffer, uint32_t pack_num, uint8_t data_type);
 void app_sdmmc_write_sectors(const void* src, size_t start_block, size_t block_count);
 
 #endif
