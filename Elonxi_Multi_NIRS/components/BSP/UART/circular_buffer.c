@@ -10,6 +10,11 @@
 #include <string.h>
 #include <esp_log.h>
 #include "uart.h"
+#include "app.h"
+// #include "app_data.h"
+#include "sdmmc.h"
+#include "wifi_data.h"
+#include "led.h"
 
 static const char *TAG = "BUFFER";
 /**
@@ -445,12 +450,29 @@ static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t fra
     //表面肌电
     if(frame_buf[3] == 0x01 && g_struct_para.if_start) {
         memcpy(&g_struct_para.emg_data, frame_buf+6, data_len);
-        g_struct_para.emg_send_flag = 1;
+        if(g_app_var.isRF){
+            udpSendSensorData(TYPE_DATA, DEVICE_TYPE_EMG_ID);
+            LED_G_TOGGLE();
+            if(g_app_var.emg_sd_write_flag){
+                g_app_var.emg_sd_write_flag = 0;
+                app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer,g_app_var.emg_sd_ready_packcnt*SD_SECTOR_NUL,SD_SECTOR_NUL*SD_INT); 
+            }
+        }
+        // g_struct_para.emg_send_flag = 1;
     }
     //肌氧
     else if(frame_buf[3] == 0x02 && g_struct_para.if_start){
         memcpy(&g_struct_para.nirs_data, frame_buf+6, data_len);
-        g_struct_para.nirs_send_flag = 1;
+        if(g_app_var.isRF){
+            udpSendSensorData(TYPE_DATA, DEVICE_TYPE_NIRS_ID);
+            LED_G_TOGGLE();
+            if(g_app_var.nirs_sd_write_flag){
+                g_app_var.nirs_sd_write_flag = 0;
+                app_sdmmc_write_sectors(g_struct_para.sd_nirs_buffer,NIRS_START_BLOCK+g_app_var.nirs_sd_ready_packcnt, SD_INT); 
+            }
+        }
+        
+        // g_struct_para.nirs_send_flag = 1;
     }
     // 发送UDP数据
     // udp_safe_send(frame_buf, total_frame_len);

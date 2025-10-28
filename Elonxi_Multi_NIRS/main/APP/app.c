@@ -1079,11 +1079,11 @@ void app_send_data_task(void *pvParameters)
                 udpSendSensorData(TYPE_MSG, DEVICE_TYPE_NIRS_ID);
                 g_app_var.synFlag = 0;  
             }
-            app_send_udp_data();
+            //app_send_udp_data();
         }
         else
         {
-            vTaskDelay(1/portTICK_PERIOD_MS);
+            vTaskDelay(10/portTICK_PERIOD_MS);
             //printf(" send data rf close;%d.\r\n", g_app_var.isRF);
             if(!g_app_var.isWiFi_connected)
             {
