@@ -85,7 +85,7 @@ void uart_rx_task(void *arg){
             
             if (written < 0) {
                 ESP_LOGE(TAG, "Failed to write to circular buffer: %s", 
-                         circular_buffer_get_error_string(-written));
+                        circular_buffer_get_error_string(-written));
                 continue;
             }
             
@@ -106,7 +106,7 @@ void uart_rx_task(void *arg){
         }
         
         // 短暂延时，避免CPU占用过高
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(1 / portTICK_PERIOD_MS);
     }
     
     // 清理资源（实际上不会执行到这里）

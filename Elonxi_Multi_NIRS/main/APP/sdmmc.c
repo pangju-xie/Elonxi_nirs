@@ -129,11 +129,11 @@ int app_sdmmc_read_sectors_safe(uint8_t *buffer, uint32_t pack_num, uint8_t data
     uint32_t read_pack_num = 0;
     uint32_t pack_baise = pack_num;
     uint8_t count = 8;
-    while(count--){
+    while(--count){
         ret = app_sdmmc_read_sectors(buffer, pack_baise, data_type);
         read_pack_num = (buffer[14] << 24) | (buffer[15] << 16) | (buffer[16] << 8) | (buffer[17]);
         if(read_pack_num != pack_num){
-            ESP_LOGE(TAG, "Failed to read packet:%ld in sector, get packet:%ld, try to get real packet in %ld, tried %d times...", pack_num, read_pack_num, pack_baise, 8-count);
+            ESP_LOGE(TAG, "Failed to read packet:%ld in sector, try to get real packet in %ld, but get packet:%ld,  tried %d times...", pack_num, pack_baise, read_pack_num, 8-count);
             pack_baise = 2 * pack_num - read_pack_num;
         }
         else{
@@ -142,6 +142,7 @@ int app_sdmmc_read_sectors_safe(uint8_t *buffer, uint32_t pack_num, uint8_t data
     }
     if(!count){
         ESP_LOGE(TAG,"Failed to read packet %ld in sector.", pack_num);
+        ret = -1;
     }
     return ret;
 }

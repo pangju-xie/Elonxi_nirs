@@ -78,7 +78,7 @@ Macros
 #define DEVICE_TYPE_NIRS_ID         0x50
 
 #define NIRS_CHANNEL                1
-#define NIRS_BYTES                  16
+#define NIRS_BYTES                  40
 
 #define SAMPLE_RATE_NIRS_100        10       
 #define SAMPLE_RATE_NIRS_50         5
@@ -103,10 +103,12 @@ enum
     RF_START=0xA0,
     RF_STOP=0xA1,
     RF_REPACK=0xF0,
+    RF_REPACK_NIRS = 0xE0,
+    RF_REPACK_IMU = 0xD0,
     RF_INFO=0xF1,
     RF_CON_ROUTER = 0xF2,
-    RF_DR_SEMG = 0xF3,
-    RF_DR_NIRS = 0xF4,
+    RF_DR_SEMG = 0xF4,
+    RF_DR_NIRS = 0xF3,
     RF_REPACK_MULTI=0xF5,
     RF_REPACK_IMU_MULTI=0xF6, 
     RF_REPACK_MULTI_NIRS = 0xF7,

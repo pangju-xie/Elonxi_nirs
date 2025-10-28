@@ -42,7 +42,8 @@
         "type_traits": "c",
         "utility": "c",
         "variant": "c",
-        "uart.h": "c"
+        "uart.h": "c",
+        "circular_buffer.h": "c"
     },
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "D:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20230419/openocd-esp32/share/openocd/scripts",

@@ -228,10 +228,11 @@ int udpUpAppSendData(uint8_t *data, int len)
 int sendToUpApp(uint8_t type)
 {
     uint16_t len=0;
+    static uint8_t  temp_data[IMU_SD_BASE_LEN] = {0x00};
 
     if(type == UPAPP_INFO)
     {
-        len = packageInfoMessage(g_app_var.payload, g_app_var.serialNumber);
+        len = packageInfoMessage(temp_data, g_app_var.serialNumber);
     }
     else if(type == UPAPP_REPACK)
     {
@@ -239,9 +240,21 @@ int sendToUpApp(uint8_t type)
     }
     else if(type == UPAPP_IMU)
     {
-        len = packageImuMessage(g_app_var.payload, g_app_var.serialNumber, IMU_PACK_LEN, g_imu_packcnt);
+        len = packageImuMessage(temp_data, g_app_var.serialNumber, IMU_PACK_LEN, g_imu_packcnt);
+        
+        memcpy(&g_struct_para.imu_sd_buffer[IMU_SD_BASE_LEN*g_app_var.imu_sd_count],temp_data,IMU_SD_BASE_LEN);
+        g_app_var.imu_sd_count++;   
+
+        if(g_app_var.imu_sd_count >= IMU_SD_INT)
+        {
+            g_app_var.imu_sd_write_flag = 1;
+            g_app_var.imu_sd_count = 0;
+            g_app_var.imu_sd_ready_packcnt = g_imu_packcnt - IMU_SD_INT + 1;
+           //printf("IMU SD WRITE-11!\n");	   
+        }
     }
-    int ret = udpUpAppSendData(g_app_var.payload, len);
+
+    int ret = udpUpAppSendData(temp_data, len);
 
     if(ret < 0)
     {

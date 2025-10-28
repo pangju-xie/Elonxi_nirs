@@ -228,12 +228,12 @@ int udpSendSensorData(uint8_t type, uint8_t sentype)
     uint16_t len_data = 0;
     //memset(sDb.payload, 0, 1024*25);
     if(type == 0){
-        len = packetSendMessage(g_app_var.payload,g_app_var.serialNumber,g_app_var.synFlag, sentype);
-        printf("print syn data: ");
-        for(int i = 0;i<len;i++){
-            printf("%02x ",g_app_var.payload[i]);
-        }
-        printf(".\r\n");
+        len = packetSendMessage(g_app_var.payload,g_app_var.serialNumber, sentype, g_app_var.synFlag);
+        // printf("print syn data: ");
+        // for(int i = 0;i<len;i++){
+        //     printf("%02x ",g_app_var.payload[i]);
+        // }
+        // printf(".\r\n");
         g_app_var.synFlag = 0;     
     }
     else
@@ -255,12 +255,12 @@ int udpSendSensorData(uint8_t type, uint8_t sentype)
             }
             if(g_app_var.rf_syn_packcnt > 0)
             {
-                if((g_app_var.nirs_packet_counter > g_app_var.rf_syn_packcnt) || (g_app_var.nirs_packet_counter < g_app_var.rf_syn_packcnt))
-                {
-                    printf("[%ld syn = %ld]\r\n",g_app_var.nirs_packet_counter,g_app_var.rf_syn_packcnt);
-                    g_app_var.nirs_packet_counter = g_app_var.rf_syn_packcnt - 1;
-                    g_app_var.rf_syn_packcnt = 0;
-                }
+                // if((g_app_var.nirs_packet_counter > g_app_var.rf_syn_packcnt) || (g_app_var.nirs_packet_counter < g_app_var.rf_syn_packcnt))
+                // {
+                //     printf("[%ld syn = %ld]\r\n",g_app_var.nirs_packet_counter,g_app_var.rf_syn_packcnt);
+                //     g_app_var.nirs_packet_counter = g_app_var.rf_syn_packcnt - 1;
+                //     g_app_var.rf_syn_packcnt = 0;
+                // }
             }
             g_app_var.nirs_packet_counter++;    
         }
@@ -281,14 +281,14 @@ int udpSendSensorData(uint8_t type, uint8_t sentype)
             }
             if(g_app_var.rf_syn_packcnt > 0)
             {
-                if((g_app_var.emg_packet_counter > g_app_var.rf_syn_packcnt) || (g_app_var.emg_packet_counter < g_app_var.rf_syn_packcnt))
-                {
-                    printf("[%ld syn = %ld]\r\n",g_app_var.emg_packet_counter,g_app_var.rf_syn_packcnt);
-                    g_app_var.emg_packet_counter = g_app_var.rf_syn_packcnt - 1;
-                    g_app_var.rf_syn_packcnt = 0;
-                }
+                // if((g_app_var.emg_packet_counter > g_app_var.rf_syn_packcnt) || (g_app_var.emg_packet_counter < g_app_var.rf_syn_packcnt))
+                // {
+                //     printf("[%ld syn = %ld]\r\n",g_app_var.emg_packet_counter,g_app_var.rf_syn_packcnt);
+                //     g_app_var.emg_packet_counter = g_app_var.rf_syn_packcnt - 1;
+                //     g_app_var.rf_syn_packcnt = 0;
+                // }
             }
-            g_app_var.emg_packet_counter++;   
+            g_app_var.emg_packet_counter++;
         }
         
     }

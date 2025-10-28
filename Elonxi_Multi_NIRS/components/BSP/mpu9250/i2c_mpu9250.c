@@ -460,18 +460,10 @@ void mpu9250_task(void *calibration) {
             if(10 == cnt)
             {
                 cnt = 0;
-                g_imu_packcnt++;
-                g_imu_send_flag = 1;
+                // g_imu_send_flag = 1;
                 // printf("imu g_imu_send_flag = %d\r\n",g_imu_send_flag);
                 app_imu_send_task();
-                
-                // static TickType_t pretick = 0, curtick = 0;
-                // curtick = xTaskGetTickCount();
-                // if(pretick != 0){
-                //     printf(" IMU SEND tick count: %lu\r\n", curtick - pretick);
-                // }
-                // pretick = curtick;
-
+                g_imu_packcnt++;
             }
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
@@ -480,36 +472,6 @@ void mpu9250_task(void *calibration) {
             //printf("IMU TASK CLOSE.\r\n");
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
-    #if 0
-        // Convert raw data to logical values with units
-        float accel_x_g = accel_x * accel_sensitivity;
-        float accel_y_g = accel_y * accel_sensitivity;
-        float accel_z_g = accel_z * accel_sensitivity;
-        float gyro_x_dps = gyro_x * gyro_sensitivity;
-        float gyro_y_dps = gyro_y * gyro_sensitivity;
-        float gyro_z_dps = gyro_z * gyro_sensitivity;
-
-        // Calculate roll and pitch
-        float roll = atan2(accel_y_g, accel_z_g) * (180.0 / M_PI);
-        float pitch = atan2(-accel_x_g, sqrt(accel_y_g * accel_y_g + accel_z_g * accel_z_g)) * (180.0 / M_PI);
-
-        // Calculate tilt compensated magnetic field components
-        float mag_x_comp = mag_x * cos(pitch) + mag_z * sin(pitch);
-        float mag_y_comp = mag_x * sin(roll) * sin(pitch) + mag_y * cos(roll) - mag_z * sin(roll) * cos(pitch);
-
-        // Calculate heading using tilt compensated values
-        float heading = atan2(-mag_y_comp, mag_x_comp) * (180.0 / M_PI);
-        heading += CONFIG_MAGNETIC_DECLINATION; // Adjust heading for local magnetic declination
-        if (heading > 360) heading -= 360;
-        if (heading < 0) heading += 360; // Normalize heading between 0 and 360 degrees
-
-        printf("Accel: X=%7.2f G, Y=%7.2f G, Z=%7.2f G   |   Gyro: X=%7.2f deg/s, Y=%7.2f deg/s, Z=%7.2f deg/s   |   Heading=%7.2f°, Pitch=%7.2f°, Roll=%7.2f°\n",
-               accel_x_g, accel_y_g, accel_z_g, 
-               gyro_x_dps, gyro_y_dps, gyro_z_dps, 
-               heading, pitch, roll);
-    #endif
-        
-        //vTaskDelay(500 / portTICK_PERIOD_MS);
     }
 }
 

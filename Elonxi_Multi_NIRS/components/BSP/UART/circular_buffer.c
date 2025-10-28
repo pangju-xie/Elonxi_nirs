@@ -336,7 +336,7 @@ const char* circular_buffer_get_error_string(circ_buf_result_t result)
 static int32_t find_frame_header(circular_buffer_t *cb)
 {
     int32_t data_len = circular_buffer_get_data_len(cb);
-    if (data_len < 4) {
+    if (data_len < 3) {
         return -1;
     }
     
@@ -365,13 +365,14 @@ static bool peek_byte_at_offset(circular_buffer_t *cb, uint32_t offset, uint8_t 
  * @param frame_start 帧头位置
  * @return true表示处理成功，false表示帧不完整或错误
  */
-static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
+static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t frame_start)
 {
     int32_t available_data = circular_buffer_get_data_len(cb);
     
     // 检查是否有足够的数据来读取长度字段
-    if (available_data < (int32_t)(frame_start + 4)) {
-        return false;  // 数据不够，等待更多数据
+    if (available_data < (int32_t)(frame_start + 6)) {
+        ESP_LOGI(TAG, "No enough data. ");
+        return FRAME_INCOMPLETE;  // 数据不够，等待更多数据
     }
     
     // 读取数据长度字段 (假设在第7、8字节位置，大端序)
@@ -379,7 +380,7 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     if (!peek_byte_at_offset(cb, frame_start + 4, &len_high) ||
         !peek_byte_at_offset(cb, frame_start + 5, &len_low)) {
         ESP_LOGE(TAG, "Failed to read length field");
-        return false;
+        return FRAME_ERROR;
     }
     
     uint16_t data_len = (len_high << 8) | len_low;
@@ -387,24 +388,30 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     // 计算完整帧长度
     uint32_t total_frame_len = MIN_FRAME_SIZE + data_len;
     
-    // 验证帧长度合理性
-    if (total_frame_len > MAX_FRAME_SIZE) {
-        ESP_LOGE(TAG, "Frame too large: %ld bytes", total_frame_len);
-        return false;
+     // 验证帧长度合理性
+    if (total_frame_len > MAX_FRAME_SIZE || data_len > MAX_FRAME_SIZE - 6) {
+        ESP_LOGE(TAG, "Frame too large: total=%ld, data=%d", total_frame_len, data_len);
+        // 丢弃损坏的帧头，继续处理
+        // circular_buffer_discard(cb, 1);
+        return FRAME_INVALID;
     }
     
     // 检查是否接收到完整帧
     if (available_data < (int32_t)(frame_start + total_frame_len)) {
-        return false;  // 帧不完整，等待更多数据
+        ESP_LOGI(TAG, "data frame incomplete.");
+        return FRAME_INCOMPLETE;  // 帧不完整，等待更多数据
     }
     
-    // 先丢弃帧头之前的无效数据
+    // 先丢弃帧头之前的无效数据（但不要丢弃太多）
     if (frame_start > 0) {
         int32_t discarded = circular_buffer_discard(cb, frame_start);
         if (discarded > 0) {
-            ESP_LOGE(TAG, "Discarded %ld invalid bytes", discarded);
+            ESP_LOGW(TAG, "Discarded %ld invalid bytes", discarded);
         }
+        // 更新frame_start，因为丢弃数据后位置变了
+        frame_start = 0;
     }
+    
     
     // 读取完整帧
     uint8_t frame_buf[MAX_FRAME_SIZE];
@@ -412,32 +419,36 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     
     if (read_len != (int32_t)total_frame_len) {
         ESP_LOGE(TAG, "Frame read error: expected %ld, got %ld", total_frame_len, read_len);
-        return false;
+        return FRAME_ERROR;
     }
     
     // 验证帧头
     if (frame_buf[0] != 0xfe || frame_buf[1] != 0xdc || frame_buf[2] != 0xba) {
         ESP_LOGE(TAG, "Frame header verification failed");
-        return false;
+        return FRAME_INVALID;
     }
     
     // 验证长度字段
     uint16_t expected_data_len = (frame_buf[4] << 8) | frame_buf[5];
     if (expected_data_len != data_len) {
         ESP_LOGE(TAG, "Frame length mismatch: expected %d, got %d", (int)data_len, (int)expected_data_len);
-        return false;
+        return FRAME_ERROR;
     }
     
     // 打印接收到的数据（调试用）
-    ESP_LOGI(TAG, "Received valid frame: %ld bytes", total_frame_len);
+    // ESP_LOGI(TAG, "Received valid frame: %ld bytes:", total_frame_len);
+    // for(int i = 0;i<6;i++){
+    //     printf("%02x, ", frame_buf[i]);
+    // }
+    // printf("/\r\n");
     
     //表面肌电
-    if(frame_buf[3] == 0x01) {
+    if(frame_buf[3] == 0x01 && g_struct_para.if_start) {
         memcpy(&g_struct_para.emg_data, frame_buf+6, data_len);
         g_struct_para.emg_send_flag = 1;
     }
     //肌氧
-    else if(frame_buf[3] == 0x02){
+    else if(frame_buf[3] == 0x02 && g_struct_para.if_start){
         memcpy(&g_struct_para.nirs_data, frame_buf+6, data_len);
         g_struct_para.nirs_send_flag = 1;
     }
@@ -445,7 +456,7 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
     // udp_safe_send(frame_buf, total_frame_len);
 
     
-    return true;
+    return FRAME_SUCCESS;
 }
 
 /**
@@ -454,45 +465,52 @@ static bool process_frame(circular_buffer_t *cb, uint32_t frame_start)
  */
 void process_all_frames(circular_buffer_t *cb)
 {
-    int32_t max_iterations = 100; // 防止无限循环
+    int32_t max_iterations = 20; // 防止无限循环
     
-    while (max_iterations-- > 0) {
+    while (max_iterations-- > 0 && !circular_buffer_is_empty(cb)) {
         // 查找帧头
         int32_t header_pos = find_frame_header(cb);
         
         if (header_pos == -1) {
-            // 没有找到帧头
+            // 没有找到帧头，检查缓冲区是否需要清理
             int32_t data_len = circular_buffer_get_data_len(cb);
-            if (data_len > MAX_FRAME_SIZE) {
-                // 如果缓冲区中的数据太多且没有帧头，清空一部分数据
-                uint32_t discard_len = data_len - MAX_FRAME_SIZE / 2;
-                int32_t discarded = circular_buffer_discard(cb, discard_len);
-                if (discarded > 0) {
-                    ESP_LOGE(TAG, "Buffer overflow protection: discarded %ld bytes", discarded);
-                }
+            int32_t free_space = circular_buffer_get_free_space(cb);
+            
+            if (free_space < (int32_t)(cb->buffer_size * 0.1) && data_len > MAX_FRAME_SIZE) {
+                uint32_t discard_len = data_len - MAX_FRAME_SIZE;
+                circular_buffer_discard(cb, discard_len);
+                ESP_LOGW(TAG, "Buffer cleanup: discarded %ld bytes", discard_len);
             }
             break;
         }
+        // 处理帧并获取明确的结果状态
+        frame_process_result_t result = process_frame(cb, (uint32_t)header_pos);
         
-        // 尝试处理从帧头开始的帧
-        if (!process_frame(cb, header_pos)) {
-            // 如果帧不完整或处理失败
-            if (header_pos == 0) {
-                int32_t data_len = circular_buffer_get_data_len(cb);
-                if (data_len >= MIN_FRAME_SIZE) {
-                    // 当前位置就是帧头但处理失败，可能是损坏的帧，丢弃帧头继续查找
-                    circular_buffer_discard(cb, 2);
-                    ESP_LOGW(TAG, "Discarded corrupted frame header");
-                    continue;
-                }
-            }
-            break;
+        switch (result) {
+            case FRAME_SUCCESS:
+                // 成功处理一帧，继续查找下一帧
+                break;
+                
+            case FRAME_INCOMPLETE:
+                // 帧不完整，退出循环等待更多数据
+                ESP_LOGD(TAG, "Incomplete frame, waiting for more data");
+                return; // 直接返回，不再继续处理
+                
+            case FRAME_INVALID:
+                // 帧无效，丢弃帧头第一个字节继续查找
+                circular_buffer_discard(cb, 1);
+                ESP_LOGD(TAG, "Invalid frame, discarded 1 byte");
+                break;
+                
+            case FRAME_ERROR:
+                // 处理错误，丢弃帧头继续查找
+                circular_buffer_discard(cb, header_pos > 0 ? (uint32_t)header_pos : 1);
+                ESP_LOGE(TAG, "Frame processing error, discarded data");
+                break;
         }
-        
-        // 成功处理了一帧，继续查找下一帧
     }
     
-    if (max_iterations <= 0) {
-        ESP_LOGW(TAG, "Frame processing loop limit reached");
-    }
+    // if (max_iterations <= 0) {
+    //     ESP_LOGW(TAG, "Frame processing loop limit reached");
+    // }
 }

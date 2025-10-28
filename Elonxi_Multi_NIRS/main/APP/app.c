@@ -137,7 +137,7 @@ uint8_t calculateXOR(uint8_t* data, uint16_t length)
 
 void udp_send_data(const uint8_t* data, size_t len) 
 {
-    static TickType_t preTick, curTick;
+   // static TickType_t preTick, curTick;
     if(!g_app_var.isPC_connected)
     {
         #if defined(_MDNS_)
@@ -150,15 +150,15 @@ void udp_send_data(const uint8_t* data, size_t len)
     {
         ESP_LOGE(TAG, "Error occurred during sending: errno %d", err);
     } 
-    else 
-    {
-        curTick = xTaskGetTickCount();
-        if((curTick-preTick)/100 != 1){
-            ESP_LOGE(TAG, "Message send time error, len=%d, use time: %.2f. ", len, (curTick-preTick)/1000.0);
+    else{
+        printf("send data:");
+        for(uint8_t i = 0;i<len;i++){
+            printf(" %x", data[i]);
         }
-        
-        preTick = curTick;
+        printf(".\r\n");
+        // ESP_LOGI(TAG, "send data ok, send len %d", len);
     }
+
 }
 
 
@@ -645,22 +645,24 @@ int repackSendData(uint8_t *data, uint16_t length, uint32_t stamp)
 void app_send_udp_data(void)
 {
     //send emg data
-    if(g_struct_para.emg_send_flag)
-    {
-        g_struct_para.emg_send_flag = 0;
-        udpSendSensorData(TYPE_DATA, DEVICE_TYPE_EMG_ID);
-        LED_G_TOGGLE();
-    }
-    if(g_app_var.emg_sd_write_flag)
-    {
-        g_app_var.emg_sd_write_flag = 0;
-        app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer, g_app_var.emg_sd_ready_packcnt*SD_SECTOR_NUL,SD_SECTOR_NUL*SD_INT); 
-    }
+    // if(g_struct_para.emg_send_flag)
+    // {
+    //     g_struct_para.emg_send_flag = 0;
+    //     udpSendSensorData(TYPE_DATA, DEVICE_TYPE_EMG_ID);
+    //     LED_G_TOGGLE();
+    // }
+    // if(g_app_var.emg_sd_write_flag)
+    // {
+    //     g_app_var.emg_sd_write_flag = 0;
+    //     app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer, g_app_var.emg_sd_ready_packcnt*SD_SECTOR_NUL,SD_SECTOR_NUL*SD_INT); 
+    // }
     //send nirs data
     if(g_struct_para.nirs_send_flag)
     {
+        // static int count = 0;
         g_struct_para.nirs_send_flag = 0;
         udpSendSensorData(TYPE_DATA, DEVICE_TYPE_NIRS_ID);
+        // ESP_LOGI(TAG, "RECEIVED NIRS data. count = %d.", count++);
         LED_G_TOGGLE();
     }
     if(g_app_var.nirs_sd_write_flag)
@@ -689,11 +691,11 @@ void app_read_sd_data_to_app(void)
     //uint8_t buffer[2500] = {0}; //1024
     int len = 0; //155-100  75-50 59-25 43-12.5
     switch(g_app_var.rf_nirs_dr_index){
-        case 0: len = 181;break;
-        case 1: len = 101;break;
-        case 2: len = 53; break;
-        case 3: len = 37; break;
-        default: len = 101; break;
+        case 0: len = 421;break;
+        case 1: len = 221;break;
+        case 2: len = 101; break;
+        case 3: len = 61; break;
+        default: len = 221; break;
     }
 
     memset(g_app_var.nirs_sd_read_buffer, 0x00, sizeof(g_app_var.nirs_sd_read_buffer)); 
@@ -745,7 +747,7 @@ void app_read_emg_sd_data_to_app_multi(uint32_t packcnt)
     static uint8_t led_set_first = 1;
     int ret = 0; 
     int len = 627; //627-1K  1227-2k 2427-4k
-    switch(g_app_var.rf_nirs_dr_index){
+    switch(g_app_var.rf_emg_dr_index){
         case 0: len = 627;break;
         case 1: len = 1227;break;
         case 2: len = 2427; break;
@@ -788,13 +790,13 @@ void app_read_nirs_sd_data_to_app_multi(uint32_t packcnt)
 {
     static uint8_t led_set_first = 1;
     int ret = 0; 
-    int len = 101; //627-1K  1227-2k 2427-4k
+    int len = 221; //627-1K  1227-2k 2427-4k
     switch(g_app_var.rf_nirs_dr_index){
-        case 0: len = 181;break;
-        case 1: len = 101;break;
-        case 2: len = 53; break;
-        case 3: len = 37; break;
-        default: len = 101; break;
+        case 0: len = 421;break;
+        case 1: len = 221;break;
+        case 2: len = 101; break;
+        case 3: len = 51; break;
+        default: len = 221; break;
     }
 
     memset(g_app_var.nirs_sd_read_buffer, 0x00, sizeof(g_app_var.nirs_sd_read_buffer)); 
@@ -966,6 +968,7 @@ void app_receive_rf_data(void)
                                     led_set('G',PIN_RESET);
                                     ESP_LOGI("CMT2300A", "APP isRF = %d",g_app_var.isRF);
                                     send_cmd_to_stm32(0x00, 0x03);
+                                    g_struct_para.if_start = 1;
                                     break;
                     case RF_STOP:
                                     g_app_var.isRF = 0;
@@ -975,6 +978,7 @@ void app_receive_rf_data(void)
                                     led_set('B',PIN_RESET);
                                     ESP_LOGI("CMT2300A", "APP isRF = %d",g_app_var.isRF);
                                     send_cmd_to_stm32(0xff, 0xff);
+                                    g_struct_para.if_start = 0;
                                     break;
                     case RF_REPACK: 
                                     if(memcmp(cmt2300_recev_buff+13,g_app_var.serialNumber, 8)==0){
@@ -1070,8 +1074,8 @@ void app_send_data_task(void *pvParameters)
         {
             if(g_app_var.synFlag)
             {
-                udpSendSensorData(TYPE_MSG, DEVICE_TYPE_EMG_ID);
-                vTaskDelay(10/portTICK_PERIOD_MS);
+                // udpSendSensorData(TYPE_MSG, DEVICE_TYPE_EMG_ID);
+                // vTaskDelay(10/portTICK_PERIOD_MS);
                 udpSendSensorData(TYPE_MSG, DEVICE_TYPE_NIRS_ID);
                 g_app_var.synFlag = 0;  
             }
@@ -1131,6 +1135,8 @@ void app_common_task(void *pvParameters)
         vTaskDelay(1000/portTICK_PERIOD_MS);
         app_check_battery_level();
         print_rssi();
+
+        app_power_key_onoff();
 
 
         if(!first_flag)
@@ -1252,12 +1258,12 @@ void app_para_init(void)
 void app_start_task(void)
 {
     ESP_LOGI(TAG, "START APP TASK");
-    xTaskCreate(app_common_task, "app_common_task", 3072, NULL, 9, NULL);
-    xTaskCreate(app_send_rf_task, "app_send_rf_task", 8192, NULL, 6, NULL);
-    xTaskCreate(app_send_data_task, "app_send_data_task", 10240, NULL, LWIP_SEND_THREAD_PRIO, NULL);
-    xTaskCreate(app_imu_task, "app_imu_task", 4096, NULL, 5, NULL);
-    xTaskCreate(app_receive_task, "app_receive_task", 4096, NULL, 7, NULL);
-    xTaskCreate(uart_rx_task, "uart_rx_task", 4096, NULL, 4, NULL);
+    xTaskCreate(app_common_task, "app_common_task", 3072, NULL, 4, NULL);
+    xTaskCreate(app_send_rf_task, "app_send_rf_task", 8192, NULL, 8, NULL);
+    xTaskCreate(app_send_data_task, "app_send_data_task", 10240, NULL, 9, NULL);
+    xTaskCreate(app_imu_task, "app_imu_task", 6144, NULL, 5, NULL);
+    //xTaskCreate(app_receive_task, "app_receive_task", 4096, NULL, 6, NULL);
+    xTaskCreate(uart_rx_task, "uart_rx_task", 4096, NULL, 7, NULL);
 }
 
 
