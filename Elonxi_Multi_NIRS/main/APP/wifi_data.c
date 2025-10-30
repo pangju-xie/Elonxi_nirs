@@ -132,7 +132,7 @@ int packetSendMessage(uint8_t *data,uint8_t *sn, uint8_t systype, uint8_t synFla
         data[i++] = SAMPLE_BYTES;
         //sample rate
         data[i++] = (g_app_var.emg_dr_pack>>8)&0xFF;
-        data[i++] = g_app_var.nirs_dr_pack&0xFF;
+        data[i++] = g_app_var.emg_dr_pack&0xFF;
     }
 
     crc = CRC16(data, 0x13);

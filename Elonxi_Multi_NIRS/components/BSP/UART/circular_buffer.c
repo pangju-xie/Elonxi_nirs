@@ -462,8 +462,11 @@ static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t fra
     }
     //肌氧
     else if(frame_buf[3] == 0x02 && g_struct_para.if_start){
-        memcpy(&g_struct_para.nirs_data, frame_buf+6, data_len);
-        if(g_app_var.isRF){
+        static uint16_t count = 0;
+        memcpy(&g_struct_para.nirs_data + count * data_len, frame_buf+6, data_len);
+        
+        if(g_app_var.isRF && count == g_app_var.nirs_dr_pack){
+            count = 0;
             udpSendSensorData(TYPE_DATA, DEVICE_TYPE_NIRS_ID);
             LED_G_TOGGLE();
             if(g_app_var.nirs_sd_write_flag){
