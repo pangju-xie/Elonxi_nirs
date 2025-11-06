@@ -150,14 +150,14 @@ void udp_send_data(const uint8_t* data, size_t len)
     {
         ESP_LOGE(TAG, "Error occurred during sending: errno %d", err);
     } 
-    else{
-        printf("send data:");
-        for(uint8_t i = 0;i<len;i++){
-            printf(" %x", data[i]);
-        }
-        printf(".\r\n");
-        // ESP_LOGI(TAG, "send data ok, send len %d", len);
-    }
+    // else{
+    //     printf("send data:");
+    //     for(uint8_t i = 0;i<len;i++){
+    //         printf(" %x", data[i]);
+    //     }
+    //     printf(".\r\n");
+    //     // ESP_LOGI(TAG, "send data ok, send len %d", len);
+    // }
 
 }
 
@@ -1079,7 +1079,7 @@ void app_send_data_task(void *pvParameters)
                 udpSendSensorData(TYPE_MSG, DEVICE_TYPE_NIRS_ID);
                 g_app_var.synFlag = 0;  
             }
-            //app_send_udp_data();
+            vTaskDelay(1/portTICK_PERIOD_MS);
         }
         else
         {
@@ -1260,9 +1260,8 @@ void app_start_task(void)
     ESP_LOGI(TAG, "START APP TASK");
     xTaskCreate(app_common_task, "app_common_task", 3072, NULL, 4, NULL);
     xTaskCreate(app_send_rf_task, "app_send_rf_task", 8192, NULL, 8, NULL);
-    xTaskCreate(app_send_data_task, "app_send_data_task", 10240, NULL, 9, NULL);
+    xTaskCreate(app_send_data_task, "app_send_data_task", 10240, NULL, 6, NULL);
     xTaskCreate(app_imu_task, "app_imu_task", 6144, NULL, 5, NULL);
-    //xTaskCreate(app_receive_task, "app_receive_task", 4096, NULL, 6, NULL);
     xTaskCreate(uart_rx_task, "uart_rx_task", 4096, NULL, 7, NULL);
 }
 

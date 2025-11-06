@@ -43,7 +43,16 @@
         "utility": "c",
         "variant": "c",
         "uart.h": "c",
-        "circular_buffer.h": "c"
+        "circular_buffer.h": "c",
+        "bit": "c",
+        "limits": "c",
+        "new": "c",
+        "stdlib.h": "c",
+        "stdio.h": "c",
+        "task.h": "c",
+        "cerrno": "c",
+        "esp_sleep.h": "c",
+        "sdkconfig.h": "c"
     },
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "D:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20230419/openocd-esp32/share/openocd/scripts",

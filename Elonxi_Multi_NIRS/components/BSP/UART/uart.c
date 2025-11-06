@@ -77,7 +77,7 @@ void uart_rx_task(void *arg){
     
     while (1) {
         // 从UART读取数据到临时缓冲区
-        rx_bytes = uart_read_bytes(UART_NUM, temp_buf, sizeof(temp_buf), 50 / portTICK_PERIOD_MS);
+        rx_bytes = uart_read_bytes(UART_NUM, temp_buf, sizeof(temp_buf), 2 / portTICK_PERIOD_MS);
         
         if (rx_bytes > 0) {
             // 将接收到的数据写入循环缓冲区
