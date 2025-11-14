@@ -5,7 +5,7 @@
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
-    "idf.portWin": "COM4",
+    "idf.portWin": "COM5",
     "idf.toolsPathWin": "d:\\Espressif\\python_env\\idf5.3_py3.11_env",
     "files.associations": {
         "pulse_cnt.h": "c",
@@ -52,7 +52,10 @@
         "task.h": "c",
         "cerrno": "c",
         "esp_sleep.h": "c",
-        "sdkconfig.h": "c"
+        "sdkconfig.h": "c",
+        "stdint.h": "c",
+        "esp_pm.h": "c",
+        "spi_slave.h": "c"
     },
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "D:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20230419/openocd-esp32/share/openocd/scripts",

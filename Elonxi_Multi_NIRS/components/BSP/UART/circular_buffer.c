@@ -262,6 +262,13 @@ int32_t circular_buffer_find(circular_buffer_t *cb, const uint8_t *pattern, uint
         // 检查是否匹配
         for (uint32_t j = 0; j < pattern_len; j++) {
             uint32_t pos = (cb->read_pos + i + j) % cb->buffer_size;
+            // 确保位置在有效范围内
+            if (pos >= cb->buffer_size) {
+                // 这不应该发生，但如果发生则处理
+                match = false;
+                break;
+            }
+        
             if (cb->buffer[pos] != pattern[j]) {
                 match = false;
                 break;
