@@ -1109,6 +1109,7 @@ void app_send_data_task(void *pvParameters)
 void nirs_task_handler(void *pvParameters){
     pvParameters = pvParameters;    
     int received_data;
+    // NIRS_Start();
     while(1){
         if(xQueueReceive(xTimerQueue, &received_data, 10/portTICK_PERIOD_MS) == pdTRUE){
             NIRS_Handler();
@@ -1161,8 +1162,6 @@ void app_common_task(void *pvParameters)
         vTaskDelay(1000/portTICK_PERIOD_MS);
         app_check_battery_level();
         print_rssi();
-        //sendToUpAppInfo();
-        //ESP_LOGI(TAG, "COME HERE.");
         if(app_power_key_onoff()){
             NIRS_Stop();
         }
@@ -1176,8 +1175,6 @@ void app_common_task(void *pvParameters)
                 led_set('R',PIN_RESET); 
                 POWER_OFF;
             }
-
-            //sendToUpAppInfo();
         }
     }
 }
