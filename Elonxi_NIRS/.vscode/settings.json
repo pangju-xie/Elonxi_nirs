@@ -43,15 +43,8 @@
         "new": "c",
         "task.h": "c",
         "stdio.h": "c",
-        "ledc.h": "c",
-        "stdint.h": "c",
-        "mcpwm_cap.h": "c",
-        "esp_task_wdt.h": "c",
-        "uart.h": "c",
-        "filters.h": "c",
-        "sys.h": "c",
-        "cmt2300a.h": "c",
-        "cmt2300a_params.h": "c"
+        "stdlib.h": "c",
+        "uart.h": "c"
     },
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "D:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20230419/openocd-esp32/share/openocd/scripts",

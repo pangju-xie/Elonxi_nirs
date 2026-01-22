@@ -306,7 +306,7 @@ int udpSendSensorData(uint8_t type)
         g_app_var.packet_counter++;
     }
 
-    //printf("packet len= %d\r\n",len);
+    printf("packet len= %d, packet_num=%ld\r\n",len, g_app_var.packet_counter);
     udp_send_data(g_app_var.payload, len);
 
 	return len;	

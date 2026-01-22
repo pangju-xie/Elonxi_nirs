@@ -11,9 +11,6 @@
 #include "driver/gpio.h"
 #include "driver/pulse_cnt.h"
 #include "driver/gptimer.h"
-#include "driver/mcpwm_cap.h"
-#include "driver/mcpwm_prelude.h"
-#include "esp_private/esp_clk.h"
 
 #include "esp_err.h"
 #include "esp_log.h"
@@ -37,17 +34,6 @@ static TickType_t startTick, endTick;
 
 MedianFilter* medfilter_red = NULL;
 MedianFilter* medfilter_ir = NULL;
-
-// 设置 MCPWM 捕获定时器的时钟频率（通常为 80 MHz）
-#define MCPWM_TIMER_CLK  10000000UL
-// MCPWM 相关句柄
-static mcpwm_cap_timer_handle_t cap_timer = NULL;
-static mcpwm_cap_channel_handle_t cap_channel = NULL;
-// 用于记录捕获到的边沿时间戳
-static uint32_t last_pos_edge = 0;
-static uint32_t last_neg_edge = 0;
-static int last_edge = -1;
-
 // BiquadFilter lpf_hb;
 // BiquadFilter lpf_hbo2;
 
@@ -141,173 +127,56 @@ void SetPWMDuty(uint8_t duty){
     ledc_update_duty(LEDC_MODE, LEDC_CHANNEL_1);
 }
 
+//脉冲计数器读取光强值
+static pcnt_unit_handle_t pcnt_unit = NULL;
+static void PD_Init(void){
+    ESP_LOGI(TAG, "install pcnt uint.");
 
-//pwm输入捕获测试光强
-
-static bool capture_cb(mcpwm_cap_channel_handle_t cap_ch,
-                       const mcpwm_capture_event_data_t *edata,
-                       void *user_data)
-{
-    // 若连续两个边沿类型一样，忽略
-    if (edata->cap_edge == last_edge) {
-        return true;
-    }
-    last_edge = edata->cap_edge;
-
-    if (edata->cap_edge == MCPWM_CAP_EDGE_POS) {
-        // 捕获到上升沿
-        if (last_neg_edge > 0) {
-            // 计算高电平时间、低电平时间和周期
-            uint32_t low_time = edata->cap_value - last_neg_edge;
-            uint32_t high_time = last_neg_edge - last_pos_edge;
-            uint32_t period = high_time + low_time;
-
-            if (period > 0) {
-                // 计算频率 (Hz) 和占空比 (%)
-                uint32_t freq = MCPWM_TIMER_CLK / period;
-                // uint32_t duty = (high_time * 10000) / period; // 万分比
-                G_nirs_data.pwm_cap.value += freq;
-                G_nirs_data.pwm_cap.count++;
-                
-                // 输出频率和占空比
-                // ESP_LOGI(TAG, "Freq: %d Hz, Duty: %.2f%%", freq, duty / 100.0f);
-            }
-        }
-        last_pos_edge = edata->cap_value;
-    } else if (edata->cap_edge == MCPWM_CAP_EDGE_NEG) {
-        // 捕获到下降沿
-        last_neg_edge = edata->cap_value;
-    }
-
-    return true; // 返回 true 表示中断处理成功
-}
-
-
-void PWM_Capture_Force_Cleanup(void)
-{
-    ESP_LOGI(TAG, "强制清理 MCPWM 捕获资源");
-    
-    // 强制清理所有可能的 MCPWM 捕获资源
-    for (int group = 0; group < 2; group++) {
-        mcpwm_cap_timer_handle_t timer;
-        mcpwm_capture_timer_config_t timer_config = {
-            .group_id = group,
-            .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
-        };
-        
-        // 尝试创建定时器来检查是否被占用
-        esp_err_t ret = mcpwm_new_capture_timer(&timer_config, &timer);
-        if (ret == ESP_OK) {
-            // 如果能创建，说明该组可用，立即删除
-            mcpwm_del_capture_timer(timer);
-            ESP_LOGI(TAG, "释放组 %d 资源", group);
-        }
-    }
-}
-
-
-void PWM_Capture_Init(void)
-{
-    // 先强制清理可能的残留资源
-    PWM_Capture_Force_Cleanup();
-    
-    // 创建 MCPWM 捕获定时器
-    mcpwm_capture_timer_config_t timer_config = {
-        .group_id = 0,  // 自动选择可用组
-        .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
+    //安装PCNT单元
+    pcnt_unit_config_t unit_config = {
+        .high_limit = 10000,
+        .low_limit = -10000,
     };
     
-    esp_err_t ret = mcpwm_new_capture_timer(&timer_config, &cap_timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "创建捕获定时器失败: 0x%x", ret);
-        // 尝试使用预定义的组
-        for (int group = 0; group < 2; group++) {
-            timer_config.group_id = group;
-            ret = mcpwm_new_capture_timer(&timer_config, &cap_timer);
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "使用组 %d 成功", group);
-                break;
-            }
-        }
-    }
-    
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "所有 MCPWM 组都不可用");
-        return;
-    }
+    ESP_ERROR_CHECK(pcnt_new_unit(&unit_config, &pcnt_unit));
 
-    // 创建 MCPWM 捕获通道
-    mcpwm_capture_channel_config_t ch_cfg = {
-        .gpio_num = PD_PIN,
-        .prescale = 1,
-        .flags.neg_edge = true,
-        .flags.pos_edge = true,
+    //设置毛刺滤波器
+    pcnt_glitch_filter_config_t filter_config = {
+        .max_glitch_ns = 10,
     };
-    
-    ret = mcpwm_new_capture_channel(cap_timer, &ch_cfg, &cap_channel);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "创建捕获通道失败: 0x%x", ret);
-        mcpwm_del_capture_timer(cap_timer);
-        cap_timer = NULL;
-        return;
-    }
+    ESP_ERROR_CHECK(pcnt_unit_set_glitch_filter(pcnt_unit, &filter_config));
 
-    ESP_LOGI(TAG, "PWM 捕获初始化完成，GPIO%d", PD_PIN);
-
-    // 注册中断回调函数
-    mcpwm_capture_event_callbacks_t cbs = {
-        .on_cap = capture_cb,
+    //安装PCNT通道
+    ESP_LOGI(TAG, "install pcnt channels");
+    pcnt_chan_config_t chan_a_config = {
+        .edge_gpio_num = PD_PIN, //边沿信号
+        .level_gpio_num = -1,//电平信号
+        .flags.virt_level_io_level = 0,
     };
-    ret = mcpwm_capture_channel_register_event_callbacks(cap_channel, &cbs, NULL);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "注册回调失败: 0x%x", ret);
-    }
+    pcnt_channel_handle_t pcnt_chan = NULL;
+    ESP_ERROR_CHECK(pcnt_new_channel(pcnt_unit, &chan_a_config, &pcnt_chan));
+    //上升沿计数，下降沿跟高低电平保持
+    ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_HOLD));
 
-    // 启用 MCPWM 定时器和通道
-    ret = mcpwm_capture_timer_enable(cap_timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "启用捕获定时器失败: 0x%x", ret);
-        return;
-    }
-    
-    ret = mcpwm_capture_channel_enable(cap_channel);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "启用捕获通道失败: 0x%x", ret);
-        return;
-    }
-
+    ESP_ERROR_CHECK(pcnt_unit_enable(pcnt_unit));
+    //ESP_ERROR_CHECK(pcnt_unit_clear_count(pcnt_unit));
 }
 
-/**
- * @brief 启动 PWM 捕获
- *        启用 MCPWM 定时器和捕获通道
- */
-void pwm_capture_start(void)
-{
-    G_nirs_data.pwm_cap.value = 0;
-    G_nirs_data.pwm_cap.count = 0;
-    esp_err_t ret;
-    ret = mcpwm_capture_timer_start(cap_timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "启动捕获定时器失败: 0x%x", ret);
-        return;
-    }
-
-    // ESP_LOGI(TAG, "PWM 捕获已启动");
+//开始计数接收器的脉冲数
+void StartPDCtrl(void){
+    pcnt_unit_clear_count(pcnt_unit);
+    pcnt_unit_start(pcnt_unit);
 }
-/**
- * @brief 停止 PWM 捕获
- *        禁用 MCPWM 通道与定时器并释放资源
- */
-void pwm_capture_stop(void)
-{
-    esp_err_t ret;
-    ret = mcpwm_capture_timer_stop(cap_timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "停止捕获定时器失败: 0x%x", ret);
-        return;
-    }
-    // ESP_LOGI(TAG, "PWM 捕获已停止");
+
+void StopPDCtrl(void){
+    pcnt_unit_stop(pcnt_unit);
+}
+//停止计数并读取脉冲值
+int ReadPDValue(void){
+    int pulse_count = 0;
+    ESP_ERROR_CHECK(pcnt_unit_get_count(pcnt_unit, &pulse_count));
+    //ESP_LOGI(TAG, "Pulse count: %d", pulse_count);
+    return pulse_count;
 }
 
 //配置NIRS控制定时器
@@ -364,10 +233,9 @@ static void NIRS_Timer_Init(void){
 
 
 void NIRS_Init(void){
-    PWM_Capture_Init();
     LED_CTRL_Init();
     LED_PWM_Init();
-    // PD_Init();
+    PD_Init();
     NIRS_Timer_Init();
 
     memset(&g_nirs_ctx, 0, sizeof(NIRS_CONTEXT));
@@ -397,6 +265,7 @@ void NIRS_Init(void){
     memset(G_nirs_data.BaseConcData, 0, sizeof(G_nirs_data.BaseConcData));
     memset(G_nirs_data.ConcData, 0, sizeof(G_nirs_data.ConcData));
     memset(G_nirs_data.SendData, 0, sizeof(G_nirs_data.SendData));
+    //NIRS_Start();
 }
 
 /*****************************************************************************
@@ -421,10 +290,9 @@ void NIRS_Start(void){
     SetPWMDuty(100);
     gpio_set_level(RED_CTRL_PIN, 1);
     gpio_set_level(IR_CTRL_PIN, 0);
+    StartPDCtrl();
     gptimer_start(gptimer);
     gptimer_set_raw_count(gptimer, 0);
-    
-    pwm_capture_start();
 }
 
 /*****************************************************************************
@@ -447,7 +315,8 @@ void NIRS_Stop(void){
     SetPWMDuty(0);
     gpio_set_level(RED_CTRL_PIN, 0);
     gpio_set_level(IR_CTRL_PIN, 0);
-    pwm_capture_stop();
+    ReadPDValue();
+    StopPDCtrl();
     memset(G_nirs_data.BaseConcData, 0, sizeof(G_nirs_data.BaseConcData));
     memset(G_nirs_data.ConcData, 0, sizeof(G_nirs_data.ConcData));
     memset(G_nirs_data.SendData, 0, sizeof(G_nirs_data.SendData));
@@ -470,15 +339,16 @@ void NIRS_Stop(void){
 *****************************************************************************/
 void NIRS_Handler(void){
     static int cur_cc = 0;
+    static int cnt = 0;
     if(NIRS_STATE_START != g_nirs_ctx.state){
         ESP_LOGI(TAG, "nirs state wrong, need to be NIRS_STATE_START.");
         return;
     }
     if(g_nirs_ctx.collect_step == RED_ON*g_nirs_ctx.semple_rate)//控制RED发光
     {
-        // ESP_LOGI(TAG, "red on");
+        //ESP_LOGI(TAG, "red on");
         gpio_set_level(RED_CTRL_PIN,1);
-        pwm_capture_start();
+        StartPDCtrl();
         g_nirs_ctx.collect_state = COLLECT_PHASE_RED;
         if(cur_cc==1){
             cur_cc = 0;
@@ -489,27 +359,26 @@ void NIRS_Handler(void){
     }
     else if (g_nirs_ctx.collect_step == RED_OFF*g_nirs_ctx.semple_rate)//控制RED关闭
     {
-        // ESP_LOGI(TAG, "red off");
+        //ESP_LOGI(TAG, "red off");
         gpio_set_level(RED_CTRL_PIN,0);
-        pwm_capture_stop();
-        G_nirs_data.RawData[0] = (uint16_t)(G_nirs_data.pwm_cap.value/G_nirs_data.pwm_cap.count);
+        StopPDCtrl();
+        G_nirs_data.RawData[0] = (uint16_t)ReadPDValue()/g_nirs_ctx.nirs_struct.led[0].rate/g_nirs_ctx.semple_rate;
         G_nirs_data.RawData[0] = medianFilterProcess(medfilter_red, G_nirs_data.RawData[0]);
         g_nirs_ctx.collect_state = COLLECT_PHASE_PAUSE;
     }
     else if (g_nirs_ctx.collect_step == IR_ON*g_nirs_ctx.semple_rate)//控制IR发光
     {
-        // ESP_LOGI(TAG, "ir on");
+        //ESP_LOGI(TAG, "ir on");
         gpio_set_level(IR_CTRL_PIN,1);
-        pwm_capture_start();
+        StartPDCtrl();
         g_nirs_ctx.collect_state = COLLECT_PHASE_IR;
     }
     else if (g_nirs_ctx.collect_step == IR_OFF*g_nirs_ctx.semple_rate)//控制IR关闭
     {
-        // ESP_LOGI(TAG, "ir off");
+        //ESP_LOGI(TAG, "ir off");
         gpio_set_level(IR_CTRL_PIN,0);
-        pwm_capture_stop();
-        G_nirs_data.RawData[1] = (uint16_t)(G_nirs_data.pwm_cap.value/G_nirs_data.pwm_cap.count);
-    
+        StopPDCtrl();
+        G_nirs_data.RawData[1] = (uint16_t)ReadPDValue()/g_nirs_ctx.nirs_struct.led[1].rate/g_nirs_ctx.semple_rate;
         G_nirs_data.RawData[1] = medianFilterProcess(medfilter_ir, G_nirs_data.RawData[1]);
         g_nirs_ctx.collect_state = COLLECT_PHASE_PAUSE;
         
@@ -519,7 +388,7 @@ void NIRS_Handler(void){
         g_nirs_ctx.collect_state = COLLECT_PHASE_SEND_DATA;
         HBCalculate(G_nirs_data.RawData, G_nirs_data.ConcData, g_nirs_ctx.nirs_struct.paraA, g_nirs_ctx.nirs_struct.paraB);
             if(g_nirs_ctx.basecount){
-                ESP_LOGI(TAG, "RED=%d, ir=%d, Hb=%.2f, HbO2=%.2f", G_nirs_data.RawData[0],G_nirs_data.RawData[1], G_nirs_data.ConcData[0], G_nirs_data.ConcData[1]);
+                //ESP_LOGI(TAG, "RED=%d, ir=%d, Hb=%.2f, HbO2=%.2f", G_nirs_data.RawData[0],G_nirs_data.RawData[1], G_nirs_data.ConcData[0], G_nirs_data.ConcData[1]);
                 //去除偏差较大的值
                 if(fabs(G_nirs_data.ConcData[0])>1000.0 || isnanf(G_nirs_data.ConcData[0])){
                     ESP_LOGI(TAG, "concdata has inf value, hb=%.2f, hbo2=%.2f",G_nirs_data.ConcData[0], G_nirs_data.ConcData[1]);
@@ -553,7 +422,10 @@ void NIRS_Handler(void){
                 // curtick=xTaskGetTickCount();
                 // ESP_LOGI(TAG,"TIME TICK: %ld", curtick-pretick);
                 // pretick = curtick;
-                ESP_LOGI(TAG, "RED=%d,IR=%d,Hb=%.2f, HbO2=%.2f,tHb=%.2f", G_nirs_data.RawData[0], G_nirs_data.RawData[1], G_nirs_data.ConcData[0], G_nirs_data.ConcData[1], G_nirs_data.ConcData[2]);
+                cnt++;
+                if(cnt%50==0){
+                    ESP_LOGI(TAG, "RED=%d,IR=%d,Hb=%.2f, HbO2=%.2f,tHb=%.2f", G_nirs_data.RawData[0], G_nirs_data.RawData[1], G_nirs_data.ConcData[0], G_nirs_data.ConcData[1], G_nirs_data.ConcData[2]);
+                }
                 
                 if(G_nirs_data.ConcData[0]>1000.0||G_nirs_data.ConcData[1]>1000.0){
                     ESP_LOGI(TAG, "concdata has inf value, hb=%.2f, hbo2=%.2f",G_nirs_data.ConcData[0], G_nirs_data.ConcData[1]);

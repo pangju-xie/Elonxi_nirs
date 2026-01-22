@@ -965,6 +965,7 @@ void app_receive_rf_data(void)
                     case RF_START:
                                     g_app_var.isRF = 1;
                                     g_app_var.synFlag = 1;
+                                    //g_app_var.packet_counter = 0;
                                     led_set('G',PIN_RESET);
                                     ESP_LOGI("CMT2300A", "APP isRF = %d",g_app_var.isRF);
                                     NIRS_Start();
@@ -1109,7 +1110,6 @@ void app_send_data_task(void *pvParameters)
 void nirs_task_handler(void *pvParameters){
     pvParameters = pvParameters;    
     int received_data;
-    // NIRS_Start();
     while(1){
         if(xQueueReceive(xTimerQueue, &received_data, 10/portTICK_PERIOD_MS) == pdTRUE){
             NIRS_Handler();
@@ -1162,6 +1162,8 @@ void app_common_task(void *pvParameters)
         vTaskDelay(1000/portTICK_PERIOD_MS);
         app_check_battery_level();
         print_rssi();
+        //sendToUpAppInfo();
+        //ESP_LOGI(TAG, "COME HERE.");
         if(app_power_key_onoff()){
             NIRS_Stop();
         }
@@ -1175,6 +1177,8 @@ void app_common_task(void *pvParameters)
                 led_set('R',PIN_RESET); 
                 POWER_OFF;
             }
+
+            //sendToUpAppInfo();
         }
     }
 }
@@ -1287,7 +1291,7 @@ void app_start_task(void)
     ESP_LOGI(TAG, "START APP TASK");
     xTaskCreate(app_common_task, "app_common_task", 3072, NULL, 3, NULL);
     xTaskCreate(app_send_rf_task, "app_send_rf_task", 8192, NULL, 6, NULL);
-    xTaskCreate(app_send_data_task, "app_send_data_task", 10240, NULL, LWIP_SEND_THREAD_PRIO, NULL);
+    xTaskCreate(app_send_data_task, "app_send_data_task", 10240, NULL, 7, NULL);
     xTaskCreate(nirs_task_handler, "nirs_task_handler", 3072, NULL, 8, NULL);
     xTaskCreate(app_imu_task, "app_imu_task", 6144, NULL, 4, NULL);
 //    xTaskCreate(app_receive_task, "app_receive_task", 4096, NULL, 5, NULL);
