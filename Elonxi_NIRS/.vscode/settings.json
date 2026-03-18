@@ -5,7 +5,7 @@
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
-    "idf.portWin": "COM5",
+    "idf.portWin": "COM13",
     "idf.toolsPathWin": "d:\\Espressif\\python_env\\idf5.3_py3.11_env",
     "files.associations": {
         "pulse_cnt.h": "c",
@@ -43,8 +43,15 @@
         "new": "c",
         "task.h": "c",
         "stdio.h": "c",
-        "stdlib.h": "c",
-        "uart.h": "c"
+        "ledc.h": "c",
+        "stdint.h": "c",
+        "mcpwm_cap.h": "c",
+        "esp_task_wdt.h": "c",
+        "uart.h": "c",
+        "filters.h": "c",
+        "sys.h": "c",
+        "cmt2300a.h": "c",
+        "cmt2300a_params.h": "c"
     },
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "D:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20230419/openocd-esp32/share/openocd/scripts",
@@ -53,5 +60,6 @@
         "IDF_TARGET": "esp32s3"
     },
     "C_Cpp.errorSquiggles": "enabled",
-    "idf.flashType": "UART"
+    "idf.flashType": "UART",
+    "idf.currentSetup": "E:/Espressif/frameworks/esp-idf-v5.4.3/"
 }
