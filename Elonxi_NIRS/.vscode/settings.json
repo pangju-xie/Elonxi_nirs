@@ -5,7 +5,7 @@
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
-    "idf.portWin": "COM13",
+    "idf.portWin": "COM16",
     "idf.toolsPathWin": "d:\\Espressif\\python_env\\idf5.3_py3.11_env",
     "files.associations": {
         "pulse_cnt.h": "c",
