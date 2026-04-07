@@ -243,6 +243,12 @@ int udpSendSensorData(uint8_t type, uint8_t sentype)
             //for sensor data 
             len = packetSendData(g_app_var.payload, g_struct_para.nirs_data, sentype, len_data, g_app_var.nirs_packet_counter);
 
+        //     printf("print syn data: ");
+        // for(int i = 0;i<len;i++){
+        //     printf("%02x ",g_app_var.payload[i]);
+        // }
+        // printf(".\r\n");
+
             //memcpy(&g_struct_para.sd_buffer[SD_BASE_LEN*g_app_var.sd_count],g_struct_para.send_data,SD_BASE_LEN);
             memcpy(&g_struct_para.sd_nirs_buffer[NIRS_DATA_LEN*g_app_var.nirs_sd_count],g_app_var.payload,NIRS_DATA_LEN);
             g_app_var.nirs_sd_count++;   

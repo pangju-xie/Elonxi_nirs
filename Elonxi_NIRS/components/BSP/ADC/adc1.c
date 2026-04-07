@@ -28,7 +28,7 @@ void adc_init(void)
     adc_digi_configuration_t adc1_init_config;                  /* ADC1初始化句柄 */
     
     /* 配置ADC1 */
-    adc1_digi_pattern_config.atten = ADC_ATTEN_DB_12;           /* 配置ADC衰减程度 */
+    adc1_digi_pattern_config.atten = ADC_ATTEN_DB_11;           /* 配置ADC衰减程度 */
     adc1_digi_pattern_config.channel = ADC_ADCX_CHY;            /* 配置ADC通道 */
     adc1_digi_pattern_config.unit = ADC_UNIT_1;                 /* 配置ADC单元 */
     adc1_digi_pattern_config.bit_width = ADC_BITWIDTH_12;       /* 配置ADC位宽 */
@@ -36,7 +36,7 @@ void adc_init(void)
     adc_digi_controller_configure(&adc1_init_config);           /* 配置ADC1 */
 
     adc_chars = calloc(1, sizeof(esp_adc_cal_characteristics_t));
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, 1100, adc_chars);  // 校准
+    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, adc_chars);  // 校准
 }
 
 /**
