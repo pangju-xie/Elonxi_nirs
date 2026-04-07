@@ -1149,7 +1149,7 @@ void app_common_task(void *pvParameters)
                 POWER_OFF;
             }
 
-            //sendToUpAppInfo();
+            sendToUpAppInfo();
         }
     }
 }

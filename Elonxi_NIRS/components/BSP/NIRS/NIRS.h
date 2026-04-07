@@ -48,9 +48,9 @@ extern "C"
 #define NIRS_DETECTOR_NUM   	1
 #define NIRS_SEND_BUF_NUM   	2
 #define NIRS_DEFAULT_BASE_NUM 	10
-#define NIRS_DATA_LEN			512
+#define NIRS_DATA_LEN			1024
 #define NIRS_SD_INT				10
-#define SD_SECTOR_MUL			1
+#define SD_SECTOR_MUL			2
 #define TH_LIGHT_LEAKOFF		150		//环境光污染阈值
 
 typedef enum {
@@ -88,11 +88,6 @@ typedef enum{
 	SR_10  = 4,
 }NIRS_SR;
 
-typedef struct{
-	int count;
-	uint32_t value;
-}G_MEAN_CAL;
-
 typedef struct _NIRS_CONTEXT
 {
 	volatile uint8_t state;
@@ -109,11 +104,9 @@ typedef struct{
 	float buf[10];
 }OUTPOINT;
 
-
 typedef struct{
 	uint8_t nirs_light_leakoff_flag;
 	uint8_t nirs_ready_flag;
-	G_MEAN_CAL pwm_cap;
 	uint16_t RawData[NIRS_SOURCE_NUM*NIRS_DETECTOR_NUM];
 	OUTPOINT base[2];
 	float BaseConcData[4];
@@ -127,7 +120,6 @@ typedef struct{
 	uint8_t intedata[NIRS_SOURCE_NUM*NIRS_DETECTOR_NUM];
 	float ConcData[4];
 }NIRS_DATA_CACHE;
-
 
 extern NIRS_DATA G_nirs_data;
 extern uint8_t nirs_flag;
