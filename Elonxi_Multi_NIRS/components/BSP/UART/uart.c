@@ -82,7 +82,6 @@ void uart_rx_task(void *arg){
         if (rx_bytes > 0) {
             // 将接收到的数据写入循环缓冲区
             int32_t written = circular_buffer_write_force(&uart_rx_buffer, temp_buf, rx_bytes);
-            
             if (written < 0) {
                 ESP_LOGE(TAG, "Failed to write to circular buffer: %s", 
                         circular_buffer_get_error_string(-written));
@@ -92,7 +91,6 @@ void uart_rx_task(void *arg){
             if (written != rx_bytes) {
             ESP_LOGE(TAG, "Partial write: %d/%d bytes", (int)written, rx_bytes);
             }
-            
             // 处理缓冲区中的所有完整帧
             process_all_frames(&uart_rx_buffer);
         }

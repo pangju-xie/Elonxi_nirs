@@ -184,6 +184,46 @@ int udp_upAppSocketInit(void)
 	return sock;
 }
 
+int packageSensorData(uint8_t *data, uint8_t *src, uint8_t *sn, uint8_t length, uint32_t stamp)
+{
+    uint16_t crc=0;
+    uint8_t i = 0;
+    
+    //head
+    for(; i < 5; i++){
+      data[i] = 0xAA;
+    }
+
+    data[i++] = 0x0;
+    data[i++] = 0x0;
+
+    //cmd
+    data[i++] = 0x02;
+
+    // sn,stamp
+    memcpy(data+i, sn, 8);
+    i+=8;
+    data[i++] = (stamp >> 24)&0xFF;
+    data[i++] = (stamp >> 16)&0xFF;
+    data[i++] = (stamp >> 8)&0xFF;
+    data[i++] = stamp&0xFF;
+
+    // data
+    memcpy(data+i, src, length);
+    i += length;
+
+    //modify length
+    data[1] = (i>> 8)&0xFF;
+    data[2] = i&0xFF;
+
+    //crc
+    crc = CRC16(data, i);
+    data[i++] = (crc >> 8)&0xFF;
+	  data[i++] = crc&0xFF;
+
+    return i;	
+}
+
 
 
 /*****************************************************************************
@@ -227,6 +267,7 @@ int udpUpAppSendData(uint8_t *data, int len)
 *****************************************************************************/
 int sendToUpApp(uint8_t type)
 {
+  printf("type: %d\n", type);
     uint16_t len=0;
     static uint8_t  temp_data[IMU_SD_BASE_LEN] = {0x00};
 
@@ -252,8 +293,21 @@ int sendToUpApp(uint8_t type)
             g_app_var.imu_sd_ready_packcnt = g_imu_packcnt - IMU_SD_INT + 1;
            //printf("IMU SD WRITE-11!\n");	   
         }
-    }
+    } else if(type == UPAPP_NIRS){
+        len = packageSensorData(g_app_var.payload, g_struct_para.nirs_data, g_app_var.serialNumber, NIRS_BYTES*NIRS_CHANNEL*g_app_var.nirs_dr_pack, g_app_var.nirs_packet_counter);
 
+        memcpy(&g_struct_para.sd_nirs_buffer[NIRS_DATA_LEN*g_app_var.nirs_sd_count],g_app_var.payload,NIRS_DATA_LEN);
+        g_app_var.nirs_sd_count++;   
+
+        if(g_app_var.nirs_sd_count >= SD_INT)
+        {
+            g_app_var.nirs_sd_count = 0;
+            g_app_var.nirs_sd_ready_packcnt = g_app_var.nirs_packet_counter - SD_INT + 1;
+            g_app_var.nirs_sd_write_flag = 1;
+        }
+        g_app_var.nirs_packet_counter++;  
+    }
+    
     int ret = udpUpAppSendData(temp_data, len);
 
     if(ret < 0)
@@ -301,11 +355,24 @@ void sendToUpAppImu(void)
     if(g_app_var.imu_sd_write_flag)
     {
         g_app_var.imu_sd_write_flag = 0;
-        //printf("IMU SD WRITE cnt = %ld!\n",g_app_var.imu_sd_ready_packcnt);	
         app_sdmmc_write_sectors(g_struct_para.imu_sd_buffer,IMU_START_BLOCK+g_app_var.imu_sd_ready_packcnt,IMU_BLOCK_LEN*2); 
     }
 }
 
+void sendToUpAppSensor(uint8_t sentype)
+{
+  if(sentype == DEVICE_TYPE_NIRS_ID)
+  {
+    sendToUpApp(UPAPP_NIRS);
+
+    if(g_app_var.nirs_sd_write_flag)
+    {
+        g_app_var.nirs_sd_write_flag = 0;
+        //printf("IMU SD WRITE cnt = %ld!\n",g_app_var.imu_sd_ready_packcnt);	
+        app_sdmmc_write_sectors(g_struct_para.sd_nirs_buffer,NIRS_START_BLOCK+g_app_var.nirs_sd_ready_packcnt,NIRS_DATA_LEN*2); 
+    }
+  }
+}
 
 /*****************************************************************************
   * Function:	  

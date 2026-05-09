@@ -7,7 +7,7 @@ extern "C"
 #endif
 
 #include "stdio.h"
-
+#include "circular_buffer.h"
 #define TXD_PIN         (GPIO_NUM_17)
 #define RXD_PIN         (GPIO_NUM_18)
 

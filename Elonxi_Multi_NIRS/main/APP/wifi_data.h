@@ -120,6 +120,7 @@ enum
     UPAPP_REPACK,
     UPAPP_INFO,
     UPAPP_IMU,
+    UPAPP_NIRS
 };
 
 enum

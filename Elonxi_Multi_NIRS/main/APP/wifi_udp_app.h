@@ -48,4 +48,5 @@ void createUdpUpAppTask(void);
 void sendToUpAppInfo(void);
 void sendToUpAppImu(void);
 int udpUpAppSendData(uint8_t *data, int len);
+void sendToUpAppSensor(uint8_t sentype);
 #endif

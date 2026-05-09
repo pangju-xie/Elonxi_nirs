@@ -67,5 +67,6 @@
     },
     "C_Cpp.errorSquiggles": "enabled",
     "idf.flashType": "UART",
-    "idf.currentSetup": "E:/Espressif/frameworks/esp-idf-v5.4.3/"
+    "idf.currentSetup": "E:/Espressif/frameworks/esp-idf-v5.4.3/",
+    "Codegeex.RepoIndex": true
 }

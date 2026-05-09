@@ -163,7 +163,9 @@ int packetSendData(uint8_t *data, uint8_t *src,uint8_t sentype, uint16_t length,
 
 #else
     //head
-    data[i++] = 0x5A; 
+    for(int j = 0; i < 5; j++){
+        data[i++] = 0xAA; 
+    }
 
     //length
     data[i++] = 0x0;

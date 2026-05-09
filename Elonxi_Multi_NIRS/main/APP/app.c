@@ -44,7 +44,6 @@
 #include "adc1.h"
 
 #include "wifi_data.h"
-#include "cmt2300_rx_tx.h"
 #include "filters.h"
 #include "i2c_mpu9250.h"
 #include "sdmmc.h"
@@ -63,10 +62,10 @@ Macros
 #define DEFAULT_IP_ADDR       "192.168.1.101" /* 默认PC IP */ //"192.168.218.10"  192.168.1.100
 #define DEV_PORT               12341           /* 连接的本地端口号 */ //22341
 #else
-#define DEFAULT_SSID          "UTI_0219"    //"UTI_0219 UTI_0264 "//"ELONXI-WiFi" /* 链接wifi名称 */ //UTI_02AC
-#define DEFAULT_PWD           "12345678"      //"12345678"//"012345678"   /* wifi密码 */ //12345678
-#define DEFAULT_IP_ADDR       "192.168.218.1" /* 默认PC IP */ //"192.168.218.1"
-#define DEV_PORT               12341           /* 连接的本地端口号 *///12341
+#define DEFAULT_SSID          "ELONXI-WiFi"    //"UTI_0219 UTI_0264 "//"ELONXI-WiFi" /* 链接wifi名称 */ //UTI_02AC
+#define DEFAULT_PWD           "012345678"      //"12345678"//"012345678"   /* wifi密码 */ //12345678
+#define DEFAULT_IP_ADDR       "192.168.218.10" /* 默认PC IP */ //"192.168.218.1"
+#define DEV_PORT               12342           /* 连接的本地端口号 *///12341
 #endif
 
 #define LWIP_DEMO_RX_BUFSIZE   100    /* 最大接收数据长度 */
@@ -91,8 +90,6 @@ static const char *TAG = "APP";
 static void app_send_data_task(void *arg);
 static void app_send_rf_task(void *pvParameters);
 
-extern uint8_t CMT2300A_ReadGpio1(void);
-extern uint8_t CMT2300A_ReadGpio2(void);
 
 /*---------------------------------------------------------------------
 Extern         				  				
@@ -237,156 +234,6 @@ void app_wifi_status(uint8_t cmd,in_addr_t local_addr)
         g_app_var.isPC_connected = true; 
         //led_set('G',PIN_RESET);
     }
-}
-
-
-/*****************************************************************************
-  * Function:	  
-  * 		 app_receive_task
-  * Description: 
-  * 		 WiFi 接收从PC发来的指令/数据
-  * Parameters:  
-  * 		 [pvParameters]
-  * Return: 	 
-  * 		 void
-*****************************************************************************/
-void app_receive_task(void *pvParameters) 
-{  
-    uint8_t rx_buffer[LWIP_DEMO_RX_BUFSIZE];    //WiFi接收数据
-    int len = 0;
-
-#if defined(_MDNS_)
-    g_sock_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    if(g_sock_fd < 0) 
-    {
-        // Error handling
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-        return;
-    }
-
-    // 设置套接字为非阻塞模式
-    int opt = 1;
-    if(ioctl(g_sock_fd, FIONBIO, &opt) < 0) 
-    {
-        // Error handling
-        ESP_LOGE(TAG, "Unable to set socket FIONBIO: errno %d", errno);
-        return;
-    }
-
-    struct sockaddr_in local_addr;
-    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);//htonl(INADDR_ANY);
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_port = htons(DEV_PORT);
-    socklen_t socklen = sizeof(local_addr);
-    bind(g_sock_fd, (struct sockaddr *)&local_addr, socklen);
-    //printf("app_receive_task 111222\r\n");
-    g_app_var.isPC_connected = true;
-
-    //dest_addr.sin_addr.s_addr = local_addr.sin_addr.s_addr;
- #endif
-    socklen_t addr_len = sizeof(dest_addr);
-    while (1) 
-    {
-        //if(g_app_var.isRF)
-        {
-            len = recvfrom(g_sock_fd, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&dest_addr, &addr_len);
-            //sendto(g_sock_fd, data, len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-            printf("len = %d\r\n",len);
-            
-            printf("udp rx:");
-            for(int i = 0; i < len; i++)
-            {
-                printf("%02X ",rx_buffer[i]);
-            }
-            printf("\r\n");
-        }
-        
-        //printf("app_receive_task 22222\r\n");
-        if(0 < len)
-        {
-            if(RF_APP_HEAD == rx_buffer[0]) //APP to device
-            {
-                uint8_t cmd = rx_buffer[2];
-                uint8_t tmp_count = 0;
-                uint32_t pack_cnt = 0;
-                uint8_t imu_tmp_count = 0;
-                uint32_t imu_pack_cnt = 0;
-
-                switch(cmd)
-                {
-                    case RF_REPACK_MULTI:
-                        // if(memcmp(&rx_buffer[11],g_app_var.serialNumber, 8) == 0)
-                        // {
-                            tmp_count = rx_buffer[19];
-                            for(int i = 0; i < tmp_count; i++) 
-                            {
-                                uint8_t b0 = rx_buffer[20+4*i];
-                                uint8_t b1 = rx_buffer[21+4*i];
-                                uint8_t b2 = rx_buffer[22+4*i];
-                                uint8_t b3 = rx_buffer[23+4*i];
-
-                                pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
-
-                                vTaskDelay(1);
-                                app_read_emg_sd_data_to_app_multi(pack_cnt);
-                                //ESP_LOGI("UDP RX", "Multi-1 pack_cnt=%ld %d", pack_cnt, tmp_count);
-                            }
-
-                            ESP_LOGI("UDP RX", "Supplemental Data Pack Multi");
-                        // }
-                        break;
-                    case RF_REPACK_MULTI_NIRS:
-                        // if(memcmp(&rx_buffer[11],g_app_var.serialNumber, 8) == 0)
-                        // {
-                            tmp_count = rx_buffer[19];
-                            for(int i = 0; i < tmp_count; i++) 
-                            {
-                                uint8_t b0 = rx_buffer[20+4*i];
-                                uint8_t b1 = rx_buffer[21+4*i];
-                                uint8_t b2 = rx_buffer[22+4*i];
-                                uint8_t b3 = rx_buffer[23+4*i];
-
-                                pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
-
-                                vTaskDelay(1);
-                                app_read_emg_sd_data_to_app_multi(pack_cnt);
-                                //ESP_LOGI("UDP RX", "Multi-1 pack_cnt=%ld %d", pack_cnt, tmp_count);
-                            }
-
-                            ESP_LOGI("UDP RX", "Supplemental Data Pack Multi");
-                        // }
-                        break;
-
-                    case RF_REPACK_IMU_MULTI:
-                        if(memcmp(&rx_buffer[11],g_app_var.serialNumber, 8) == 0)
-                        {
-                            imu_tmp_count = rx_buffer[19];
-                            for(int i = 0; i < imu_tmp_count; i++) 
-                            {
-                                uint8_t b0 = rx_buffer[20+4*i];
-                                uint8_t b1 = rx_buffer[21+4*i];
-                                uint8_t b2 = rx_buffer[22+4*i];
-                                uint8_t b3 = rx_buffer[23+4*i];
-
-                                imu_pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
-
-                                vTaskDelay(2);
-                                app_read_sd_data_to_app_imu_multi(imu_pack_cnt);
-                                //ESP_LOGI("UDP RX", "imu Multi-1 pack_cnt=%ld %d", imu_pack_cnt, imu_tmp_count);
-                            }
-                            ESP_LOGI("UDP RX", "Supplemental Data Pack IMU Multi");
-                        }
-                        break;
-
-                    default :
-                        break;
-                }
-            }
-        }
-         vTaskDelay(100/portTICK_PERIOD_MS);
-    }
-    free(rx_buffer);
-    vTaskDelete(NULL);
 }
 
 
@@ -672,65 +519,6 @@ void app_send_udp_data(void)
     }
 }
 
-/****************************************************************************************
-  * Function:	  
-  * 		 app_read_sd_data_to_app
-  * Description: 
-  * 		 read sd data to app for wifi
-  *          A5 17 F0 6D 61 72 6B 30 30 30 32 65 30 30 62 34 33 38 63 00 00 00 20 14 7D
-  * Parameters:  
-  * 		 [void]
-  * Return: 	 
-  * 		 void
-*****************************************************************************************/
-void app_read_sd_data_to_app(void)
-{
-    uint32_t packcnt = 0;
-    int ret = 0; 
-    uint32_t sd_packcnt = 0;
-    //uint8_t buffer[2500] = {0}; //1024
-    int len = 0; //155-100  75-50 59-25 43-12.5
-    switch(g_app_var.rf_nirs_dr_index){
-        case 0: len = 421;break;
-        case 1: len = 221;break;
-        case 2: len = 101; break;
-        case 3: len = 61; break;
-        default: len = 221; break;
-    }
-
-    memset(g_app_var.nirs_sd_read_buffer, 0x00, sizeof(g_app_var.nirs_sd_read_buffer)); 
-
-    packcnt = (cmt2300_recev_buff[19] << 24) | (cmt2300_recev_buff[20] << 16) | (cmt2300_recev_buff[21] << 8) | (cmt2300_recev_buff[22]);
-    // ret = app_sdmmc_read_sectors_safe(g_app_var.nirs_sd_read_buffer,packcnt, 2);
-
-    // ESP_LOGI("TO APP", "packcnt=%ld ret=%d",packcnt,ret);
-    if(packcnt>g_app_var.nirs_packet_counter){
-        ESP_LOGE("to app", "packet = %ld has no data in sdmmc", packcnt);
-        repackSendData(g_app_var.nirs_sd_read_buffer, len, packcnt);
-        ret = ESP_OK;
-    }
-    else{
-        ret = app_sdmmc_read_sectors_safe(g_app_var.nirs_sd_read_buffer,packcnt, 2);
-        sd_packcnt = (g_app_var.nirs_sd_read_buffer[14] << 24) | (g_app_var.nirs_sd_read_buffer[15] << 16) | (g_app_var.nirs_sd_read_buffer[16] << 8) | (g_app_var.nirs_sd_read_buffer[17]);
-    }
-
-    ESP_LOGI("TO APP", "packcnt= %ld, get_packcnt = %ld, ret=%d", packcnt, sd_packcnt, ret);
-
-
-    if(ret != ESP_OK)
-    {
-        led_set('R',PIN_RESET);
-        return;
-    }
-    else
-    {
-        led_set('R',PIN_RESET);
-        LED_B_TOGGLE();
-        udpUpAppSendData(g_app_var.nirs_sd_read_buffer, len);
-    }
-
-}
-
 
 /****************************************************************************************
   * Function:	  
@@ -868,10 +656,10 @@ void app_read_sd_data_to_app_imu_multi(uint32_t packcnt)
   * Return: 	 
   * 		 void
 *****************************************************************************/
-void app_set_emg_dr(void)
+void app_set_emg_dr(uint8_t dr_index)
 {
-    g_app_var.rf_emg_dr_index = (int32_t)cmt2300_recev_buff[19];
-    // app_set_rf_nirs_dr_index_nvs();  
+    g_app_var.rf_emg_dr_index = (int32_t)dr_index;
+    app_set_rf_nirs_dr_index_nvs();  
     led_set('R', PIN_RESET);
     switch(g_app_var.rf_emg_dr_index){
         case 0:g_app_var.emg_dr_pack = SAMPLE_RATE_EMG_1K;break;
@@ -896,10 +684,10 @@ void app_set_emg_dr(void)
   * Return: 	 
   * 		 void
 *****************************************************************************/
-void app_set_nirs_dr(void)
+void app_set_nirs_dr(uint8_t dr_index)
 {
-    g_app_var.rf_nirs_dr_index = (int32_t)cmt2300_recev_buff[19];
-    // app_set_rf_nirs_dr_index_nvs();  
+    g_app_var.rf_nirs_dr_index = (int32_t)dr_index;
+    app_set_rf_nirs_dr_index_nvs();  
     led_set('R', PIN_RESET);
     switch(g_app_var.rf_nirs_dr_index){
         case 0:g_app_var.nirs_dr_pack = SAMPLE_RATE_NIRS_100;break;
@@ -918,138 +706,218 @@ void app_set_nirs_dr(void)
 
 /*****************************************************************************
   * Function:	  
-  * 		 app_receive_rf_data
+  * 		 app_receive_task
   * Description: 
-  * 		 receive Router RF data
-  * Parameters:  
-  * 		 [void]
-  * Return: 	 
-  * 		 void
-*****************************************************************************/
-void app_receive_rf_data(void)
-{
-    uint8_t  ret , cmt_rx_len ;
-    // uint8_t buffer[5] = {0x5A,0x01,0x10,0x0D,0x0A};
-
-  #if 0
-    uint8_t buffer[5] = {0x5A,0x01,0x10,0x0D,0x0A};
-    ret = CMT2300_Send_Buff(buffer,5);
-    ESP_LOGI("CMT2300A", "send ret = %d",ret);
-
-  #else 
-    //ESP_LOGI("CMT2300A", "GPIO1=%d GPIO2=%d",CMT2300A_ReadGpio1(),CMT2300A_ReadGpio2());
-    //ESP_LOGI("CMT2300A", "CMT2300A revice len=%d %d" ,cmt_rx_len,ret);
-
-    //if(!g_app_var.isRF)
-    {
-        ret = CMT2300_Rece_buff(&cmt_rx_len); 
-        if(ret == 1)
-        {
-            if(RF_HEAD == cmt2300_recev_buff[0]) //Router to device
-            {
-                if(0x10 == cmt2300_recev_buff[2]) //5A 0F 10 6D 61 72 6B 30 30 30 32 00 00 18 41 CA C1
-                {
-                    //g_app_var.isRF = 1;
-                    //g_app_var.synFlag = 1;
-                    //led_set('G',PIN_RESET);
-                    g_app_var.rf_syn_packcnt = (cmt2300_recev_buff[11] << 24) | (cmt2300_recev_buff[12] << 16) | (cmt2300_recev_buff[13] << 8) | (cmt2300_recev_buff[14]);
-                    ESP_LOGI("CMT2300A", "SYN cnt = %ld",g_app_var.rf_syn_packcnt);
-                }
-            }
-            
-            if(RF_APP_HEAD == cmt2300_recev_buff[0]) //APP to device
-            {
-                uint8_t cmd = cmt2300_recev_buff[2];
-                switch(cmd)
-                {
-                    case RF_START:
-                                    g_app_var.isRF = 1;
-                                    g_app_var.synFlag = 1;
-                                    led_set('G',PIN_RESET);
-                                    ESP_LOGI("CMT2300A", "APP isRF = %d",g_app_var.isRF);
-                                    send_cmd_to_stm32(0x00, 0x03);
-                                    g_struct_para.if_start = 1;
-                                    break;
-                    case RF_STOP:
-                                    g_app_var.isRF = 0;
-                                    g_app_var.synFlag = 0;
-                                    //g_app_var.packet_counter = 0;
-                                    led_set('G',PIN_SET);
-                                    led_set('B',PIN_RESET);
-                                    ESP_LOGI("CMT2300A", "APP isRF = %d",g_app_var.isRF);
-                                    send_cmd_to_stm32(0xff, 0xff);
-                                    g_struct_para.if_start = 0;
-                                    break;
-                    case RF_REPACK: 
-                                    if(memcmp(cmt2300_recev_buff+13,g_app_var.serialNumber, 8)==0){
-                                        //判断传感器id与指令id是否相同
-                                        app_read_sd_data_to_app();//fix here
-                                        ESP_LOGI("CMT2300A", "RF Supplemental Data Pack");
-                                    }
-                                    break;   
-                    case RF_INFO:   
-                                    ESP_LOGI("CMT2300A", "RF INFO");
-                                    sendToUpAppInfo();
-                                    break; 
-                                    
-                    case RF_DR_SEMG:
-                                    ESP_LOGI("CMT2300A", "RF DR");
-                                    app_set_emg_dr();
-                                    break; 
-                    case RF_DR_NIRS:
-                                    ESP_LOGI("CMT2300A", "RF DR");
-                                    app_set_nirs_dr();
-                                    break; 
-                    case RF_OTA:
-                                    ESP_LOGI("CMT2300A", "RF OTA: Waiting update");
-                                    vTaskDelay(1000);
-                                    xTaskCreate(wifi_ota_task, "wifi_ota_task", 8192, NULL, 2, NULL);
-                                    break;                            
-                    case RF_IMU_START:    
-                                    SetIMU(1);
-                                    ESP_LOGI("CMT2300A", "RF IMU = 1");
-                                    break; 
-                    case RF_IMU_STOP:    
-                                   SetIMU(0);
-                                    ESP_LOGI("CMT2300A", "RF IMU = 0");
-                                    break;        
-
-                    default : break;
-                }
-            }
-
-        }
-        else
-        {
-
-        }
-    }
-   #endif
-}
-
-
-
-/*****************************************************************************
-  * Function:	  
-  * 		 app_send_rf_task
-  * Description: 
-  * 		 rf task
+  * 		 WiFi 接收从PC发来的指令/数据
   * Parameters:  
   * 		 [pvParameters]
   * Return: 	 
   * 		 void
 *****************************************************************************/
-void app_send_rf_task(void *pvParameters)
+void app_receive_task(void *pvParameters)
 {
-    pvParameters = pvParameters;
+    uint8_t rx_buffer[LWIP_DEMO_RX_BUFSIZE]; // WiFi接收数据
+    int len = 0;
 
-    while(1)
+#if defined(_MDNS_)
+    g_sock_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (g_sock_fd < 0)
     {
-        app_receive_rf_data();
-        vTaskDelay(1);
+        // Error handling
+        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+        return;
     }
 
+    // 设置套接字为非阻塞模式
+    int opt = 1;
+    if (ioctl(g_sock_fd, FIONBIO, &opt) < 0)
+    {
+        // Error handling
+        ESP_LOGE(TAG, "Unable to set socket FIONBIO: errno %d", errno);
+        return;
+    }
+
+    struct sockaddr_in local_addr;
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY); // htonl(INADDR_ANY);
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = htons(DEV_PORT);
+    socklen_t socklen = sizeof(local_addr);
+    bind(g_sock_fd, (struct sockaddr *)&local_addr, socklen);
+    // printf("app_receive_task 111222\r\n");
+    g_app_var.isPC_connected = true;
+
+    // dest_addr.sin_addr.s_addr = local_addr.sin_addr.s_addr;
+#endif
+    socklen_t addr_len = sizeof(dest_addr);
+    struct sockaddr_in local_addr;
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY); // 设置监听ip? 修改后无法收到信息
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = htons(DEV_PORT);
+    socklen_t socklen = sizeof(local_addr);
+    bind(g_sock_fd, (struct sockaddr *)&local_addr, socklen);
+    while (1)
+    {
+        // if(g_app_var.isRF)
+        {
+            len = recvfrom(g_sock_fd, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&dest_addr, &addr_len);
+            // sendto(g_sock_fd, data, len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            printf("len = %d\r\n", len);
+
+            printf("udp rx:");
+            for (int i = 0; i < len; i++)
+            {
+                printf("%02X ", rx_buffer[i]);
+            }
+            printf("\r\n");
+        }
+
+        // printf("app_receive_task 22222\r\n");
+        if (0 < len)
+        {
+            if (RF_APP_HEAD == rx_buffer[0]) // APP to device
+            {
+                uint8_t cmd = rx_buffer[2];
+                uint8_t tmp_count = 0;
+                uint32_t pack_cnt = 0;
+                uint8_t imu_tmp_count = 0;
+                uint32_t imu_pack_cnt = 0;
+
+                switch (cmd)
+                {
+                case RF_START:
+                    g_app_var.isRF = 1;
+                    g_app_var.synFlag = 1;
+                    led_set('G', PIN_RESET);
+                    ESP_LOGI("UDP RX", "Start Sample");
+                    send_cmd_to_stm32(0x00, 0x03);
+                    g_struct_para.if_start = 1;
+                    break;
+                case RF_STOP:
+                    g_app_var.isRF = 0;
+                    g_app_var.synFlag = 0;
+                    // g_app_var.packet_counter = 0;
+                    led_set('G', PIN_SET);
+                    led_set('B', PIN_RESET);
+                    ESP_LOGI("UDP RX", "Stop Sample");
+                    send_cmd_to_stm32(0xff, 0xff);
+                    g_struct_para.if_start = 0;
+                    break;
+                case RF_INFO:
+                    ESP_LOGI("UDP RX", "INFO");
+                    sendToUpAppInfo();
+                    break;
+                case RF_DR_SEMG:
+                    {
+                        ESP_LOGI("UDP RX", "DR");
+                        uint8_t dr_index = rx_buffer[19];
+                         app_set_emg_dr(dr_index);  // todo
+                        break;
+                    }
+                case RF_DR_NIRS:
+                    {
+                        ESP_LOGI("UDP RX", "DR");
+                        uint8_t dr_index = rx_buffer[19];
+                        app_set_nirs_dr(dr_index);  // todo
+                        break;
+                    }
+                case RF_OTA:
+                    ESP_LOGI("UDP RX", "OTA: Waiting update");
+                    vTaskDelay(1000);
+                    xTaskCreate(wifi_ota_task, "wifi_ota_task", 8192, NULL, 2, NULL);
+                    break;
+                case RF_IMU_START:
+                    SetIMU(1);
+                    ESP_LOGI("UDP RX", "IMU = 1");
+                    break;
+                case RF_IMU_STOP:
+                    SetIMU(0);
+                    ESP_LOGI("UDP RX", "IMU = 0");
+                    break;
+                case RF_REPACK:
+                    uint8_t b0 = rx_buffer[19];
+                    uint8_t b1 = rx_buffer[20];
+                    uint8_t b2 = rx_buffer[21];
+                    uint8_t b3 = rx_buffer[22];
+                    pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
+
+                    app_read_nirs_sd_data_to_app_multi(pack_cnt);
+                    ESP_LOGI("UDP RX", "Supplemental Data Pack");
+                    break;
+                case RF_REPACK_MULTI:
+                    // if(memcmp(&rx_buffer[11],g_app_var.serialNumber, 8) == 0)
+                    // {
+                    tmp_count = rx_buffer[19];
+                    for (int i = 0; i < tmp_count; i++)
+                    {
+                        uint8_t b0 = rx_buffer[20 + 4 * i];
+                        uint8_t b1 = rx_buffer[21 + 4 * i];
+                        uint8_t b2 = rx_buffer[22 + 4 * i];
+                        uint8_t b3 = rx_buffer[23 + 4 * i];
+
+                        pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
+
+                        vTaskDelay(1);
+                        app_read_emg_sd_data_to_app_multi(pack_cnt);
+                        // ESP_LOGI("UDP RX", "Multi-1 pack_cnt=%ld %d", pack_cnt, tmp_count);
+                    }
+
+                    ESP_LOGI("UDP RX", "Supplemental Data Pack Multi");
+                    // }
+                    break;
+                case RF_REPACK_MULTI_NIRS:
+                    // if(memcmp(&rx_buffer[11],g_app_var.serialNumber, 8) == 0)
+                    // {
+                    tmp_count = rx_buffer[19];
+                    for (int i = 0; i < tmp_count; i++)
+                    {
+                        uint8_t b0 = rx_buffer[20 + 4 * i];
+                        uint8_t b1 = rx_buffer[21 + 4 * i];
+                        uint8_t b2 = rx_buffer[22 + 4 * i];
+                        uint8_t b3 = rx_buffer[23 + 4 * i];
+
+                        pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
+
+                        vTaskDelay(1);
+                        app_read_emg_sd_data_to_app_multi(pack_cnt);
+                        // ESP_LOGI("UDP RX", "Multi-1 pack_cnt=%ld %d", pack_cnt, tmp_count);
+                    }
+
+                    ESP_LOGI("UDP RX", "Supplemental Data Pack Multi");
+                    // }
+                    break;
+
+                case RF_REPACK_IMU_MULTI:
+                    if (memcmp(&rx_buffer[11], g_app_var.serialNumber, 8) == 0)
+                    {
+                        imu_tmp_count = rx_buffer[19];
+                        for (int i = 0; i < imu_tmp_count; i++)
+                        {
+                            uint8_t b0 = rx_buffer[20 + 4 * i];
+                            uint8_t b1 = rx_buffer[21 + 4 * i];
+                            uint8_t b2 = rx_buffer[22 + 4 * i];
+                            uint8_t b3 = rx_buffer[23 + 4 * i];
+
+                            imu_pack_cnt = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
+
+                            vTaskDelay(2);
+                            app_read_sd_data_to_app_imu_multi(imu_pack_cnt);
+                            // ESP_LOGI("UDP RX", "imu Multi-1 pack_cnt=%ld %d", imu_pack_cnt, imu_tmp_count);
+                        }
+                        ESP_LOGI("UDP RX", "Supplemental Data Pack IMU Multi");
+                    }
+                    break;
+
+                default:
+                    break;
+                }
+            }
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+    free(rx_buffer);
+    vTaskDelete(NULL);
 }
+
 
 
 /*****************************************************************************
@@ -1259,7 +1127,7 @@ void app_start_task(void)
 {
     ESP_LOGI(TAG, "START APP TASK");
     xTaskCreate(app_common_task, "app_common_task", 3072, NULL, 4, NULL);
-    xTaskCreate(app_send_rf_task, "app_send_rf_task", 8192, NULL, 8, NULL);
+    xTaskCreate(app_receive_task, "app_receive_task", 8192, NULL, 8, NULL);
     xTaskCreate(app_send_data_task, "app_send_data_task", 4096, NULL, 6, NULL);
     xTaskCreate(app_imu_task, "app_imu_task", 6144, NULL, 5, NULL);
     xTaskCreate(uart_rx_task, "uart_rx_task", 8192, NULL, 7, NULL);
@@ -1287,6 +1155,7 @@ void app_esp32_init(void)
     uart_init();
 
     app_para_init();
+    app_set_nirs_dr(1);
 
     //gpio log level
     esp_log_level_set("gpio", ESP_LOG_ERROR); 
@@ -1298,9 +1167,6 @@ void app_esp32_init(void)
     //adc config
     adc_init();
     app_get_battery_level();
-
-    //cmt2300
-    Cmt2300_Init();
 
     //sd card
     sd_card_init();

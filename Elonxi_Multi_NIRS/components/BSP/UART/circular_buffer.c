@@ -14,6 +14,7 @@
 // #include "app_data.h"
 #include "sdmmc.h"
 #include "wifi_data.h"
+#include "wifi_udp_app.h"
 #include "led.h"
 
 static const char *TAG = "BUFFER";
@@ -155,14 +156,12 @@ int32_t circular_buffer_write_force(circular_buffer_t *cb, const uint8_t *data, 
     }
     
     uint32_t written = 0;
-    
     for (uint32_t i = 0; i < len; i++) {
         // 如果缓冲区满，丢弃最老的数据
         if (cb->data_len >= cb->buffer_size) {
             cb->read_pos = (cb->read_pos + 1) % cb->buffer_size;
             cb->data_len--;
         }
-        
         cb->buffer[cb->write_pos] = data[i];
         cb->write_pos = (cb->write_pos + 1) % cb->buffer_size;
         cb->data_len++;
@@ -380,13 +379,11 @@ static bool peek_byte_at_offset(circular_buffer_t *cb, uint32_t offset, uint8_t 
 static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t frame_start)
 {
     int32_t available_data = circular_buffer_get_data_len(cb);
-    
     // 检查是否有足够的数据来读取长度字段
     if (available_data < (int32_t)(frame_start + 6)) {
         ESP_LOGI(TAG, "No enough data. ");
         return FRAME_INCOMPLETE;  // 数据不够，等待更多数据
     }
-    
     // 读取数据长度字段 (假设在第7、8字节位置，大端序)
     uint8_t len_high, len_low;
     if (!peek_byte_at_offset(cb, frame_start + 4, &len_high) ||
@@ -394,7 +391,6 @@ static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t fra
         ESP_LOGE(TAG, "Failed to read length field");
         return FRAME_ERROR;
     }
-    
     uint16_t data_len = (len_high << 8) | len_low;
     
     // 计算完整帧长度
@@ -424,16 +420,13 @@ static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t fra
         frame_start = 0;
     }
     
-    
     // 读取完整帧
     uint8_t frame_buf[MAX_FRAME_SIZE];
     int32_t read_len = circular_buffer_read(cb, frame_buf, total_frame_len);
-    
     if (read_len != (int32_t)total_frame_len) {
         ESP_LOGE(TAG, "Frame read error: expected %ld, got %ld", total_frame_len, read_len);
         return FRAME_ERROR;
     }
-    
     // 验证帧头
     if (frame_buf[0] != 0xfe || frame_buf[1] != 0xdc || frame_buf[2] != 0xba) {
         ESP_LOGE(TAG, "Frame header verification failed");
@@ -453,18 +446,15 @@ static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t fra
     //     printf("%02x, ", frame_buf[i]);
     // }
     // printf("/\r\n");
-    
     //表面肌电
     if(frame_buf[3] == 0x01 && g_struct_para.if_start) {
         memcpy(&g_struct_para.emg_data, frame_buf+6, data_len);
-        if(g_app_var.isRF){
             udpSendSensorData(TYPE_DATA, DEVICE_TYPE_EMG_ID);
             LED_G_TOGGLE();
             if(g_app_var.emg_sd_write_flag){
                 g_app_var.emg_sd_write_flag = 0;
                 app_sdmmc_write_sectors(g_struct_para.sd_emg_buffer,g_app_var.emg_sd_ready_packcnt*SD_SECTOR_NUL,SD_SECTOR_NUL*SD_INT); 
             }
-        }
         // g_struct_para.emg_send_flag = 1;
     }
     //肌氧
@@ -472,9 +462,10 @@ static frame_process_result_t  process_frame(circular_buffer_t *cb, uint32_t fra
         static uint16_t count = 0;
         memcpy(&g_struct_para.nirs_data[count * data_len], frame_buf+6, data_len);
         count++;
-        if(g_app_var.isRF && count == g_app_var.nirs_dr_pack){
+        if(count == g_app_var.nirs_dr_pack){
             count = 0;
             udpSendSensorData(TYPE_DATA, DEVICE_TYPE_NIRS_ID);
+            // sendToUpAppSensor(DEVICE_TYPE_NIRS_ID);
             LED_G_TOGGLE();
             if(g_app_var.nirs_sd_write_flag){
                 g_app_var.nirs_sd_write_flag = 0;
