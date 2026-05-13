@@ -112,6 +112,7 @@ enum
     RF_REPACK_MULTI=0xF5,
     RF_REPACK_IMU_MULTI=0xF6, 
     RF_REPACK_MULTI_NIRS = 0xF7,
+    RF_DEV_CONFIG = 0xFF,
 };
 
 enum 

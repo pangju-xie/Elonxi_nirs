@@ -163,7 +163,7 @@ int packetSendData(uint8_t *data, uint8_t *src,uint8_t sentype, uint16_t length,
 
 #else
     //head
-    for(int j = 0; i < 5; j++){
+    for(int j = 0; j < 5; j++){
         data[i++] = 0xAA; 
     }
 
@@ -172,11 +172,7 @@ int packetSendData(uint8_t *data, uint8_t *src,uint8_t sentype, uint16_t length,
     data[i++] = 0x0;
 
     //cmd
-    data[i++] = sentype +1; 
-
-    //mark
-    data[i++] = 0;//(sDb.seq>>8)&0xFF;
-    data[i++] = 0x01;//sDb.seq&0xFF;
+    data[i++] = 0x02; 
 
     //sn
     memcpy(data+i, g_app_var.serialNumber, 8);
@@ -187,18 +183,17 @@ int packetSendData(uint8_t *data, uint8_t *src,uint8_t sentype, uint16_t length,
 	data[i++] = (stamp >> 8)&0xFF;
 	data[i++] = stamp&0xFF;
 
-    //interval
-    data[i++] = 0x01; //ms <= 200ms
+    // 标记
+    data[i++] = 0x7F;
+    data[i++] = 0xFF;
 
     //data
     memcpy(data+i, src, length);
     i += length;
 
-    //printf("packet data= %d %d %d\r\n",data[2418],data[2419], data[2420]);
-
     //modify length
-    data[1] = (i>> 8)&0xFF;
-    data[2] = i&0xFF;
+    data[5] = (i>> 8)&0xFF;
+    data[6] = i&0xFF;
 
     //crc
     crc = CRC16(data, i);
@@ -231,11 +226,6 @@ int udpSendSensorData(uint8_t type, uint8_t sentype)
     //memset(sDb.payload, 0, 1024*25);
     if(type == 0){
         len = packetSendMessage(g_app_var.payload,g_app_var.serialNumber, sentype, g_app_var.synFlag);
-        // printf("print syn data: ");
-        // for(int i = 0;i<len;i++){
-        //     printf("%02x ",g_app_var.payload[i]);
-        // }
-        // printf(".\r\n");
         g_app_var.synFlag = 0;     
     }
     else

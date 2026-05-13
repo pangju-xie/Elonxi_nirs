@@ -334,6 +334,41 @@ void app_wifi_start_mdns_service(void)
     ESP_ERROR_CHECK( mdns_service_txt_set("_http", "_udp", serviceTxtData, sizeof(serviceTxtData) / sizeof(serviceTxtData[0])) );
 }
 
+void set_static_ip_for_sta(void)
+{
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    
+    if (sta_netif) {
+        // 1. 停止DHCP客户端
+        esp_err_t err = esp_netif_dhcpc_stop(sta_netif);
+        if (err == ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
+            ESP_LOGI("IP_CONFIG", "DHCP already stopped");
+        } else if (err != ESP_OK) {
+            ESP_LOGE("IP_CONFIG", "Failed to stop DHCP: %s", esp_err_to_name(err));
+            return;
+        }
+        
+        // 2. 配置静态IP
+        esp_netif_ip_info_t ip_info;
+        ip_info.ip.addr = ipaddr_addr("192.168.218.1");
+        ip_info.gw.addr = ipaddr_addr("192.168.218.1");   // 网关（根据实际路由器设置）
+        ip_info.netmask.addr = ipaddr_addr("255.255.255.0");
+        
+        err = esp_netif_set_ip_info(sta_netif, &ip_info);
+        if (err == ESP_OK) {
+            ESP_LOGI("IP_CONFIG", "Static IP set to 192.168.218.1");
+        } else {
+            ESP_LOGE("IP_CONFIG", "Failed to set IP: %s", esp_err_to_name(err));
+        }
+        
+        // 3. 配置DNS（可选）
+        esp_netif_dns_info_t dns;
+        dns.ip.u_addr.ip4.addr = ipaddr_addr("8.8.8.8");  // 或使用网关作为DNS
+        dns.ip.type = IPADDR_TYPE_V4;
+        esp_netif_set_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns);
+    }
+}
+
 
 /*****************************************************************************
   * Function:	  
@@ -350,6 +385,7 @@ void app_wifi_and_mdns_conf(void)
     esp_netif_init();
     esp_event_loop_create_default();
     esp_netif_create_default_wifi_sta();
+    set_static_ip_for_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
@@ -905,6 +941,8 @@ void app_receive_task(void *pvParameters)
                         }
                         ESP_LOGI("UDP RX", "Supplemental Data Pack IMU Multi");
                     }
+                    break;
+                case RF_DEV_CONFIG:  // 配置信息应答
                     break;
 
                 default:
